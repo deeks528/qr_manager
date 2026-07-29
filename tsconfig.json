@@ -1,0 +1,26 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "CommonJS",
+    "jsx": "react-native",
+    "lib": ["ES2022"],
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "moduleResolution": "node",
+    "resolveJsonModule": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "baseUrl": ".",
+    "paths": {
+      "@app/*": ["src/app/*"],
+      "@database/*": ["src/database/*"],
+      "@domain/*": ["src/domain/*"],
+      "@features/*": ["src/features/*"],
+      "@shared/*": ["src/shared/*"]
+    }
+  },
+  "include": ["src", "tests"]
+}
+

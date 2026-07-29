@@ -1,0 +1,70 @@
+# Dependencies
+node_modules/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# React Native / Metro
+.expo/
+.expo-shared/
+metro-cache/
+.cache/
+*.tsbuildinfo
+.metro-check-assets/
+rn-config-output.txt
+*.jsbundle
+
+# Android / Gradle
+android/.gradle/
+android/.idea/
+android/.kotlin/
+android/app/build/
+android/build/
+android/local.properties
+android/app/debug.keystore
+android/app/release.keystore
+android/app/.cxx/
+android/.cxx/
+*.pb.gz
+*.hprof
+
+# iOS
+ios/Pods/
+ios/build/
+ios/DerivedData/
+ios/Podfile.lock
+ios/*.xcworkspace
+ios/*.xcuserdata
+
+# Secrets and env files
+.env
+.env.*
+!.env.example
+
+# Keystores
+*.jks
+*.keystore
+
+# Test / coverage
+coverage/
+
+# Editor / OS
+.vscode/
+.idea/
+.artifacts/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Project specific
+/docs/
+/wireframes/
+/md_files/
+a.txt
+a.log
+git.log
