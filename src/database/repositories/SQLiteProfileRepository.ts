@@ -7,7 +7,6 @@ import { BackupV1 } from '@domain/services/ExportService';
 import {
   MAX_PROFILES,
   MAX_QUICK_PROFILES,
-  OtherProfile,
   Profile,
   ProfileType,
   UPIProfile,
@@ -15,36 +14,24 @@ import {
 } from '@domain/models/Profile';
 import { AvatarService } from '@domain/services/AvatarService';
 import { ValidationService } from '@domain/services/ValidationService';
+import { ProfileSubtypeHandler } from './ProfileSubtypeHandler';
 
 const PROFILE_SELECT = `
 SELECT
-  p.id,
-  p.type,
-  p.nickname,
-  p.logoPath,
-  p.avatarColor,
-  p.displayOrder,
-  p.quickAccessSlot,
-  p.createdAt,
-  p.updatedAt,
-  u.upiId,
-  u.minimumAmount,
-  u.defaultDescription,
+  p.id, p.type, p.nickname, p.logoPath, p.avatarColor, p.displayOrder, p.quickAccessSlot, p.createdAt, p.updatedAt,
+  u.upiId, u.minimumAmount, u.defaultDescription,
   w.mobileNumber,
-  o.qrImagePath
+  cp.text,
+  o.imagePath, o.extractedText
 FROM profiles p
 LEFT JOIN upi_profiles u ON u.profileId = p.id
 LEFT JOIN whatsapp_profiles w ON w.profileId = p.id
+LEFT JOIN custom_profiles cp ON cp.profileId = p.id
 LEFT JOIN other_profiles o ON o.profileId = p.id
 `;
 
-interface CountRow extends SqlRow {
-  count: number;
-}
-
-interface NextOrderRow extends SqlRow {
-  nextOrder: number;
-}
+interface CountRow extends SqlRow { count: number; }
+interface NextOrderRow extends SqlRow { nextOrder: number; }
 
 export class SQLiteProfileRepository implements ProfileRepository {
   constructor(
@@ -52,7 +39,7 @@ export class SQLiteProfileRepository implements ProfileRepository {
     private readonly settingsRepository: SettingsRepository,
     private readonly createId: () => string = createDefaultProfileId,
     private readonly now: () => number = Date.now,
-  ) {}
+  ) { }
 
   async createProfile(input: CreateProfileInput): Promise<Profile> {
     const profileCount = await this.getProfileCount();
@@ -60,14 +47,12 @@ export class SQLiteProfileRepository implements ProfileRepository {
       throw new ValidationError(`Maximum of ${MAX_PROFILES} profiles reached.`);
     }
 
-    const validatedInput = normalizeProfileFields(input.profile);
-    await this.ensureUniqueIdentifier(validatedInput);
-
     const settings = await this.settingsRepository.getSettings();
     const nickname = ValidationService.validateNickname(input.profile.nickname);
     const createdAt = this.now();
+
     const profile = {
-      ...validatedInput,
+      ...input.profile,
       id: this.createId(),
       nickname,
       avatarColor: AvatarService.createAvatarColor(nickname, settings.installationId),
@@ -76,29 +61,19 @@ export class SQLiteProfileRepository implements ProfileRepository {
       updatedAt: createdAt,
     } as Profile;
 
+    await this.ensureUniqueIdentifier(profile);
+
     await this.db.transaction(async (client) => {
       if (profile.quickAccessSlot !== null) {
-        await client.execute('UPDATE profiles SET quickAccessSlot = NULL WHERE quickAccessSlot = ?', [
-          profile.quickAccessSlot,
-        ]);
+        await client.execute('UPDATE profiles SET quickAccessSlot = NULL WHERE quickAccessSlot = ?', [profile.quickAccessSlot]);
       }
 
       await client.execute(
         'INSERT INTO profiles (id, type, nickname, logoPath, avatarColor, displayOrder, quickAccessSlot, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-        [
-          profile.id,
-          profile.type,
-          profile.nickname,
-          profile.logoPath,
-          profile.avatarColor,
-          profile.displayOrder,
-          profile.quickAccessSlot,
-          profile.createdAt,
-          profile.updatedAt,
-        ],
+        [profile.id, profile.type, profile.nickname, profile.logoPath, profile.avatarColor, profile.displayOrder, profile.quickAccessSlot, profile.createdAt, profile.updatedAt],
       );
 
-      await this.insertSubtype(client, profile);
+      await ProfileSubtypeHandler.insert(client, profile);
     });
 
     return profile;
@@ -110,17 +85,14 @@ export class SQLiteProfileRepository implements ProfileRepository {
       throw new ValidationError('Profile type cannot be changed.');
     }
 
-    const validatedProfile = normalizeProfileFields(profile);
-    await this.ensureUniqueIdentifier(validatedProfile, profile.id);
+    await this.ensureUniqueIdentifier(profile, profile.id);
 
     const settings = await this.settingsRepository.getSettings();
     const nickname = ValidationService.validateNickname(profile.nickname);
-    const avatarColor =
-      nickname === existing.nickname
-        ? existing.avatarColor
-        : AvatarService.createAvatarColor(nickname, settings.installationId);
+    const avatarColor = nickname === existing.nickname ? existing.avatarColor : AvatarService.createAvatarColor(nickname, settings.installationId);
+
     const updated: Profile = {
-      ...validatedProfile,
+      ...profile,
       nickname,
       avatarColor,
       displayOrder: existing.displayOrder,
@@ -130,10 +102,7 @@ export class SQLiteProfileRepository implements ProfileRepository {
 
     await this.db.transaction(async (client) => {
       if (updated.quickAccessSlot !== null) {
-        await client.execute('UPDATE profiles SET quickAccessSlot = NULL WHERE quickAccessSlot = ? AND id != ?', [
-          updated.quickAccessSlot,
-          updated.id,
-        ]);
+        await client.execute('UPDATE profiles SET quickAccessSlot = NULL WHERE quickAccessSlot = ? AND id != ?', [updated.quickAccessSlot, updated.id]);
       }
 
       await client.execute(
@@ -141,7 +110,7 @@ export class SQLiteProfileRepository implements ProfileRepository {
         [updated.nickname, updated.logoPath, updated.avatarColor, updated.quickAccessSlot, updated.updatedAt, updated.id],
       );
 
-      await this.updateSubtype(client, updated);
+      await ProfileSubtypeHandler.update(client, updated);
     });
 
     return updated;
@@ -152,9 +121,7 @@ export class SQLiteProfileRepository implements ProfileRepository {
     const settings = await this.settingsRepository.getSettings();
 
     await this.db.transaction(async (client) => {
-      await client.execute('DELETE FROM upi_profiles WHERE profileId = ?', [profileId]);
-      await client.execute('DELETE FROM whatsapp_profiles WHERE profileId = ?', [profileId]);
-      await client.execute('DELETE FROM other_profiles WHERE profileId = ?', [profileId]);
+      await ProfileSubtypeHandler.deleteAll(client, existing);
       await client.execute('DELETE FROM profiles WHERE id = ?', [profileId]);
       await this.compactDisplayOrder(client);
 
@@ -167,8 +134,6 @@ export class SQLiteProfileRepository implements ProfileRepository {
     if (settings.defaultProfileId === profileId) {
       await this.settingsRepository.getSettings();
     }
-
-    void existing;
   }
 
   async getProfile(profileId: string): Promise<Profile | null> {
@@ -182,31 +147,19 @@ export class SQLiteProfileRepository implements ProfileRepository {
   }
 
   async getQuickProfiles(): Promise<Profile[]> {
-    const result = await this.db.execute<ProfileRow>(
-      `${PROFILE_SELECT} WHERE p.quickAccessSlot IS NOT NULL ORDER BY p.quickAccessSlot ASC`,
-    );
+    const result = await this.db.execute<ProfileRow>(`${PROFILE_SELECT} WHERE p.quickAccessSlot IS NOT NULL ORDER BY p.quickAccessSlot ASC`);
     return result.rows.map((row) => ProfileMapper.fromRow(row));
   }
 
   async setDefaultProfile(profileId: string | null): Promise<void> {
-    if (profileId !== null) {
-      await this.getRequiredProfile(profileId);
-    }
-
+    if (profileId !== null) await this.getRequiredProfile(profileId);
     const settings = await this.settingsRepository.getSettings();
-    await this.settingsRepository.updateSettings({
-      ...settings,
-      defaultProfileId: profileId,
-    });
+    await this.settingsRepository.updateSettings({ ...settings, defaultProfileId: profileId });
   }
 
   async assignQuickAccessSlot(profileId: string, slot: 0 | 1 | 2 | 3): Promise<void> {
     await this.getRequiredProfile(profileId);
-
-    if (slot < 0 || slot >= MAX_QUICK_PROFILES) {
-      throw new ValidationError('Quick access slot must be between 0 and 3.');
-    }
-
+    if (slot < 0 || slot >= MAX_QUICK_PROFILES) throw new ValidationError('Quick access slot must be between 0 and 3.');
     await this.db.transaction(async (client) => {
       await client.execute('UPDATE profiles SET quickAccessSlot = NULL WHERE quickAccessSlot = ?', [slot]);
       await client.execute('UPDATE profiles SET quickAccessSlot = ? WHERE id = ?', [slot, profileId]);
@@ -220,32 +173,19 @@ export class SQLiteProfileRepository implements ProfileRepository {
 
   async updateDisplayOrder(profileIds: string[]): Promise<void> {
     const profiles = await this.getAllProfiles();
-    if (profileIds.length !== profiles.length) {
-      throw new ValidationError('Display order must include every profile.');
-    }
-
-    const knownIds = new Set(profiles.map((profile) => profile.id));
-    if (profileIds.some((profileId) => !knownIds.has(profileId))) {
-      throw new ValidationError('Display order contains an unknown profile.');
-    }
+    if (profileIds.length !== profiles.length) throw new ValidationError('Display order must include every profile.');
+    const knownIds = new Set(profiles.map((p) => p.id));
+    if (profileIds.some((id) => !knownIds.has(id))) throw new ValidationError('Display order contains an unknown profile.');
 
     await this.db.transaction(async (client) => {
-      for (let index = 0; index < profileIds.length; index += 1) {
-        await client.execute('UPDATE profiles SET displayOrder = ? WHERE id = ?', [-(index + 1), profileIds[index]]);
-      }
-
-      for (let index = 0; index < profileIds.length; index += 1) {
-        await client.execute('UPDATE profiles SET displayOrder = ? WHERE id = ?', [index, profileIds[index]]);
-      }
+      for (let i = 0; i < profileIds.length; i++) await client.execute('UPDATE profiles SET displayOrder = ? WHERE id = ?', [-(i + 1), profileIds[i]]);
+      for (let i = 0; i < profileIds.length; i++) await client.execute('UPDATE profiles SET displayOrder = ? WHERE id = ?', [i, profileIds[i]]);
     });
   }
 
   private async getRequiredProfile(profileId: string): Promise<Profile> {
     const profile = await this.getProfile(profileId);
-    if (!profile) {
-      throw new ValidationError('Profile not found.');
-    }
-
+    if (!profile) throw new ValidationError('Profile not found.');
     return profile;
   }
 
@@ -255,268 +195,110 @@ export class SQLiteProfileRepository implements ProfileRepository {
   }
 
   private async getNextDisplayOrder(): Promise<number> {
-    const result = await this.db.execute<NextOrderRow>(
-      'SELECT COALESCE(MAX(displayOrder), -1) + 1 as nextOrder FROM profiles',
-    );
+    const result = await this.db.execute<NextOrderRow>('SELECT COALESCE(MAX(displayOrder), -1) + 1 as nextOrder FROM profiles');
     return result.rows[0]?.nextOrder ?? 0;
   }
 
   private async getPromotedDefaultId(client: SqlClient, deletedDisplayOrder: number): Promise<string | null> {
-    const nextResult = await client.execute<{ id: string }>(
-      'SELECT id FROM profiles WHERE displayOrder >= ? ORDER BY displayOrder ASC LIMIT 1',
-      [deletedDisplayOrder],
-    );
-
-    if (nextResult.rows[0]) {
-      return nextResult.rows[0].id;
-    }
-
-    const firstResult = await client.execute<{ id: string }>(
-      'SELECT id FROM profiles ORDER BY displayOrder ASC LIMIT 1',
-    );
+    const nextResult = await client.execute<{ id: string }>('SELECT id FROM profiles WHERE displayOrder >= ? ORDER BY displayOrder ASC LIMIT 1', [deletedDisplayOrder]);
+    if (nextResult.rows[0]) return nextResult.rows[0].id;
+    const firstResult = await client.execute<{ id: string }>('SELECT id FROM profiles ORDER BY displayOrder ASC LIMIT 1');
     return firstResult.rows[0]?.id ?? null;
   }
 
-  private async ensureUniqueIdentifier(profile: CreateProfileInput['profile'] | Profile, currentProfileId?: string): Promise<void> {
+  private async ensureUniqueIdentifier(profile: Profile, currentProfileId?: string): Promise<void> {
     if (profile.type === ProfileType.UPI) {
       const upiId = ValidationService.validateUPIId(profile.upiId);
-      const result = await this.db.execute<{ profileId: string }>(
-        'SELECT profileId FROM upi_profiles WHERE upiId = ? AND profileId != ?',
-        [upiId, currentProfileId ?? ''],
-      );
-
-      if (result.rows.length > 0) {
-        throw new DuplicateUPIError();
-      }
+      const result = await this.db.execute<{ profileId: string }>('SELECT profileId FROM upi_profiles WHERE upiId = ? AND profileId != ?', [upiId, currentProfileId ?? '']);
+      if (result.rows.length > 0) throw new DuplicateUPIError();
     }
-
     if (profile.type === ProfileType.WhatsApp) {
       const mobileNumber = ValidationService.validateMobileNumber(profile.mobileNumber);
-      const result = await this.db.execute<{ profileId: string }>(
-        'SELECT profileId FROM whatsapp_profiles WHERE mobileNumber = ? AND profileId != ?',
-        [mobileNumber, currentProfileId ?? ''],
-      );
-
-      if (result.rows.length > 0) {
-        throw new DuplicatePhoneError();
-      }
+      const result = await this.db.execute<{ profileId: string }>('SELECT profileId FROM whatsapp_profiles WHERE mobileNumber = ? AND profileId != ?', [mobileNumber, currentProfileId ?? '']);
+      if (result.rows.length > 0) throw new DuplicatePhoneError();
     }
-  }
-
-  private async insertSubtype(client: SqlClient, profile: Profile): Promise<void> {
-    if (profile.type === ProfileType.UPI) {
-      await client.execute(
-        'INSERT INTO upi_profiles (profileId, upiId, minimumAmount, defaultDescription) VALUES (?, ?, ?, ?)',
-        [
-          profile.id,
-          ValidationService.validateUPIId(profile.upiId),
-          ValidationService.validateAmount(profile.minimumAmount),
-          profile.defaultDescription,
-        ],
-      );
-      return;
-    }
-
-    if (profile.type === ProfileType.WhatsApp) {
-      await client.execute('INSERT INTO whatsapp_profiles (profileId, mobileNumber) VALUES (?, ?)', [
-        profile.id,
-        ValidationService.validateMobileNumber(profile.mobileNumber),
-      ]);
-      return;
-    }
-
-    await client.execute('INSERT INTO other_profiles (profileId, qrImagePath) VALUES (?, ?)', [
-      profile.id,
-      requireImportedQr(profile),
-    ]);
-  }
-
-  private async updateSubtype(client: SqlClient, profile: Profile): Promise<void> {
-    if (profile.type === ProfileType.UPI) {
-      await client.execute(
-        'UPDATE upi_profiles SET upiId = ?, minimumAmount = ?, defaultDescription = ? WHERE profileId = ?',
-        [
-          ValidationService.validateUPIId(profile.upiId),
-          ValidationService.validateAmount(profile.minimumAmount),
-          profile.defaultDescription,
-          profile.id,
-        ],
-      );
-      return;
-    }
-
-    if (profile.type === ProfileType.WhatsApp) {
-      await client.execute('UPDATE whatsapp_profiles SET mobileNumber = ? WHERE profileId = ?', [
-        ValidationService.validateMobileNumber(profile.mobileNumber),
-        profile.id,
-      ]);
-      return;
-    }
-
-    await client.execute('UPDATE other_profiles SET qrImagePath = ? WHERE profileId = ?', [
-      requireImportedQr(profile),
-      profile.id,
-    ]);
   }
 
   private async compactDisplayOrder(client: SqlClient): Promise<void> {
     const result = await client.execute<{ id: string }>('SELECT id FROM profiles ORDER BY displayOrder ASC');
-
-    for (let index = 0; index < result.rows.length; index += 1) {
-      await client.execute('UPDATE profiles SET displayOrder = ? WHERE id = ?', [index, result.rows[index].id]);
-    }
+    for (let i = 0; i < result.rows.length; i++) await client.execute('UPDATE profiles SET displayOrder = ? WHERE id = ?', [i, result.rows[i].id]);
   }
 
   async restoreBackup(backup: BackupV1): Promise<void> {
+    const validatedProfiles: Profile[] = [];
     const upiIds = new Set<string>();
     const mobileNumbers = new Set<string>();
-    const validatedProfiles: Array<UPIProfile | WhatsAppProfile> = [];
 
     for (const p of backup.profiles) {
       const nickname = ValidationService.validateNickname(p.nickname);
+      const base = {
+        ...p,
+        id: p.id || this.createId(),
+        nickname,
+      };
 
       if (p.type === ProfileType.UPI) {
         const upiId = ValidationService.validateUPIId(p.upiId);
-        if (upiIds.has(upiId)) {
-          throw new ValidationError('Backup contains duplicate UPI IDs.');
-        }
+        if (upiIds.has(upiId)) throw new ValidationError('Backup contains duplicate UPI IDs.');
         upiIds.add(upiId);
-        const minimumAmount = ValidationService.validateAmount(p.minimumAmount);
 
         validatedProfiles.push({
-          ...p,
-          id: p.id || this.createId(),
-          nickname,
+          ...base,
+          type: ProfileType.UPI,
           upiId,
-          minimumAmount,
+          minimumAmount: ValidationService.validateAmount(p.minimumAmount),
         } as UPIProfile);
       } else if (p.type === ProfileType.WhatsApp) {
         const mobileNumber = ValidationService.validateMobileNumber(p.mobileNumber);
-        if (mobileNumbers.has(mobileNumber)) {
-          throw new ValidationError('Backup contains duplicate WhatsApp numbers.');
-        }
+        if (mobileNumbers.has(mobileNumber)) throw new ValidationError('Backup contains duplicate WhatsApp numbers.');
         mobileNumbers.add(mobileNumber);
 
         validatedProfiles.push({
-          ...p,
-          id: p.id || this.createId(),
-          nickname,
+          ...base,
+          type: ProfileType.WhatsApp,
           mobileNumber,
         } as WhatsAppProfile);
       }
+      // Add other types if present in backup...
     }
 
     if (validatedProfiles.length > MAX_PROFILES) {
-      throw new ValidationError(`Backup contains more than the maximum allowed profiles (${MAX_PROFILES}).`);
+      throw new ValidationError(`Backup contains more than ${MAX_PROFILES} profiles.`);
     }
 
     await this.db.transaction(async (client) => {
-      // Clear current profiles and subtype tables
       await client.execute('DELETE FROM upi_profiles');
       await client.execute('DELETE FROM whatsapp_profiles');
+      await client.execute('DELETE FROM custom_profiles');
       await client.execute('DELETE FROM other_profiles');
       await client.execute('DELETE FROM profiles');
 
-      // Insert validated profiles
-      for (let index = 0; index < validatedProfiles.length; index += 1) {
-        const profile = validatedProfiles[index];
-        const displayOrder = index;
+      const settings = await this.settingsRepository.getSettings();
+
+      for (let i = 0; i < validatedProfiles.length; i++) {
+        const profile = validatedProfiles[i];
         const createdAt = this.now();
-        const settings = await this.settingsRepository.getSettings();
         const avatarColor = AvatarService.createAvatarColor(profile.nickname, settings.installationId);
 
         await client.execute(
           'INSERT INTO profiles (id, type, nickname, logoPath, avatarColor, displayOrder, quickAccessSlot, createdAt, updatedAt) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-          [
-            profile.id,
-            profile.type,
-            profile.nickname,
-            profile.logoPath ?? null,
-            avatarColor,
-            displayOrder,
-            profile.quickAccessSlot ?? null,
-            createdAt,
-            createdAt,
-          ],
+          [profile.id, profile.type, profile.nickname, profile.logoPath ?? null, avatarColor, i, profile.quickAccessSlot ?? null, createdAt, createdAt],
         );
 
-        if (profile.type === ProfileType.UPI) {
-          await client.execute(
-            'INSERT INTO upi_profiles (profileId, upiId, minimumAmount, defaultDescription) VALUES (?, ?, ?, ?)',
-            [
-              profile.id,
-              profile.upiId,
-              profile.minimumAmount,
-              profile.defaultDescription ?? null,
-            ],
-          );
-        } else if (profile.type === ProfileType.WhatsApp) {
-          await client.execute(
-            'INSERT INTO whatsapp_profiles (profileId, mobileNumber) VALUES (?, ?)',
-            [
-              profile.id,
-              profile.mobileNumber,
-            ],
-          );
-        }
+        await ProfileSubtypeHandler.insert(client, profile);
       }
 
-      // Restore settings
-      const currentSettings = await this.settingsRepository.getSettings();
-      let defaultProfileId = backup.settings.defaultProfileId ?? null;
-
-      // Ensure the default profile exists in the imported set
+      let defaultId = backup.settings.defaultProfileId ?? null;
       const importedIds = new Set(validatedProfiles.map((p) => p.id));
-      if (defaultProfileId && !importedIds.has(defaultProfileId)) {
-        defaultProfileId = validatedProfiles[0]?.id ?? null;
-      }
+      if (defaultId && !importedIds.has(defaultId)) defaultId = validatedProfiles[0]?.id ?? null;
 
-      await client.execute(
-        'UPDATE settings SET defaultProfileId = ?, maxHeaderProfiles = ? WHERE id = 1',
-        [defaultProfileId, backup.settings.maxHeaderProfiles],
-      );
+      await client.execute('UPDATE settings SET defaultProfileId = ?, maxHeaderProfiles = ? WHERE id = 1', [defaultId, backup.settings.maxHeaderProfiles]);
     });
 
-    // Synchronize settings cache
     await this.settingsRepository.getSettings();
   }
-}
-
-function normalizeProfileFields<T extends CreateProfileInput['profile'] | Profile>(profile: T): T {
-  if (profile.type === ProfileType.UPI) {
-    return {
-      ...profile,
-      upiId: ValidationService.validateUPIId(profile.upiId),
-      minimumAmount: ValidationService.validateAmount(profile.minimumAmount),
-    };
-  }
-
-  if (profile.type === ProfileType.WhatsApp) {
-    return {
-      ...profile,
-      mobileNumber: ValidationService.validateMobileNumber(profile.mobileNumber),
-    };
-  }
-
-  return {
-    ...profile,
-    qrImagePath: requireImportedQr(profile),
-  };
-}
-
-function requireImportedQr(profile: Pick<OtherProfile, 'qrImagePath'>): string {
-  if (!profile.qrImagePath.trim()) {
-    throw new ValidationError('Imported QR image is required.');
-  }
-
-  return profile.qrImagePath;
 }
 
 function createDefaultProfileId(): string {
   return `profile-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
-
-
-
-
-

@@ -31,7 +31,7 @@ export class ValidationService {
   }
 
   static validateMobileNumber(mobileNumber: string): string {
-    const digits = mobileNumber.replace(/\D/g, '');
+    const digits = mobileNumber?.replace(/\D/g, '');
 
     if (!digits) {
       throw new ValidationError('Mobile number is required.');
@@ -54,5 +54,15 @@ export class ValidationService {
     }
 
     return amount;
+  }
+
+  static validateCustomText(text: string): string {
+    const trimmed = text?.trim();
+
+    if (!trimmed) {
+      throw new ValidationError('QR text is required.');
+    }
+
+    return trimmed;
   }
 }

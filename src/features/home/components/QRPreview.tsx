@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 
@@ -18,21 +18,36 @@ export function QRPreview({ profile, runtimeAmount, initialPayload }: QRPreviewP
         <Image
           accessibilityLabel={`${profile.nickname} imported QR`}
           resizeMode="contain"
-          source={{ uri: profile.qrImagePath }}
+          source={{ uri: profile.imagePath }}
           style={styles.importedQr}
         />
       </View>
     );
   }
 
-  const payload =
-    initialPayload != null
-      ? initialPayload
-      : profile.type === ProfileType.UPI
-        ? QRPayloadService.createUPIPayload(profile, runtimeAmount)
-        : QRPayloadService.createWhatsAppPayload(profile);
+  const payload = useMemo(() => {
+    try {
+      if (initialPayload != null) return initialPayload;
 
-  console.log(payload, profile.type, profile, initialPayload);
+      switch (profile.type) {
+        case ProfileType.UPI:
+          return QRPayloadService.createUPIPayload(profile, runtimeAmount);
+        case ProfileType.WhatsApp:
+          return QRPayloadService.createWhatsAppPayload(profile);
+        case ProfileType.Custom:
+          return QRPayloadService.createCustomPayload(profile);
+        default:
+          return '';
+      }
+    } catch (error) {
+      console.error('QR Payload Error:', error);
+      return '';
+    }
+  }, [profile, runtimeAmount, initialPayload]);
+
+  if (!payload) {
+    return <QRPreviewFallback />;
+  }
 
   return (
     <View accessibilityLabel={`${profile.nickname} QR code`} style={styles.qrFrame}>

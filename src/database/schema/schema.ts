@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS settings (
 
 CREATE TABLE IF NOT EXISTS profiles (
   id TEXT PRIMARY KEY,
-  type INTEGER NOT NULL CHECK (type IN (0, 1, 2)),
+  type INTEGER NOT NULL CHECK (type IN (0, 1, 2, 3)),
   nickname TEXT NOT NULL CHECK (length(nickname) <= 24),
   logoPath TEXT NULL,
   avatarColor TEXT NOT NULL,
@@ -33,9 +33,16 @@ CREATE TABLE IF NOT EXISTS whatsapp_profiles (
   FOREIGN KEY (profileId) REFERENCES profiles(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS custom_profiles (
+  profileId TEXT PRIMARY KEY,
+  text TEXT NOT NULL,
+  FOREIGN KEY (profileId) REFERENCES profiles(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS other_profiles (
   profileId TEXT PRIMARY KEY,
-  qrImagePath TEXT NOT NULL,
+  imagePath TEXT NOT NULL,
+  extractedText TEXT,
   FOREIGN KEY (profileId) REFERENCES profiles(id) ON DELETE CASCADE
 );
 

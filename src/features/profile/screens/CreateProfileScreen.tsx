@@ -9,18 +9,22 @@ import {
   Text,
   TextInput,
   View,
+  Image,
+  KeyboardTypeOptions,
+  TextInputProps,
 } from 'react-native';
 
 import { CreateProfileData } from '@database/repositories/ProfileRepository';
 import { ProfileType } from '@domain/models/Profile';
 import { useCreateProfile } from '@features/profile/hooks/useCreateProfile';
+import { getImage } from '@features/profile/hooks/getImage';
 
 interface CreateProfileScreenProps {
   onCancel: () => void;
-  onSaved: () => void;
+  onSaved: (profile: Profile) => void;
 }
 
-type DraftType = ProfileType.UPI | ProfileType.WhatsApp | ProfileType.Other;
+type DraftType = ProfileType.UPI | ProfileType.WhatsApp | ProfileType.Custom | ProfileType.Other;
 
 export function CreateProfileScreen({ onCancel, onSaved }: CreateProfileScreenProps): React.JSX.Element {
   const createProfile = useCreateProfile();
@@ -30,10 +34,26 @@ export function CreateProfileScreen({ onCancel, onSaved }: CreateProfileScreenPr
   const [minimumAmount, setMinimumAmount] = useState('');
   const [defaultDescription, setDefaultDescription] = useState('');
   const [mobileNumber, setMobileNumber] = useState('');
-  const [qrImagePath, setQrImagePath] = useState('');
+  const [imagePath, setImagePath] = useState('');
+  const [text, setText] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
 
-  const canSave = useMemo(() => nickname.trim().length > 0 && !createProfile.isPending, [createProfile.isPending, nickname]);
+  const canSave = useMemo(() => {
+    const hasNickname = nickname.trim().length > 0;
+    const hasTypeData = selectedType !== ProfileType.Other || imagePath.trim().length > 0;
+    return hasNickname && hasTypeData && !createProfile.isPending;
+  }, [createProfile.isPending, nickname, selectedType, imagePath]);
+
+  const handlePickImage = async () => {
+    try {
+      const path = await getImage();
+      if (path) {
+        setImagePath(path);
+      }
+    } catch (error) {
+      setFormError('Failed to pick or save image');
+    }
+  };
 
   const handleSave = (): void => {
     setFormError(null);
@@ -45,7 +65,8 @@ export function CreateProfileScreen({ onCancel, onSaved }: CreateProfileScreenPr
       minimumAmount,
       defaultDescription,
       mobileNumber,
-      qrImagePath,
+      imagePath,
+      text,
     });
 
     createProfile.mutate(profile, {
@@ -77,11 +98,16 @@ export function CreateProfileScreen({ onCancel, onSaved }: CreateProfileScreenPr
 
           <Text style={styles.title}>Create Profile</Text>
 
-          <View style={styles.typeGrid}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.typeGrid}
+          >
             <TypeCard label="UPI" selected={selectedType === ProfileType.UPI} onPress={() => setSelectedType(ProfileType.UPI)} />
             <TypeCard label="WhatsApp" selected={selectedType === ProfileType.WhatsApp} onPress={() => setSelectedType(ProfileType.WhatsApp)} />
+            <TypeCard label="Custom" selected={selectedType === ProfileType.Custom} onPress={() => setSelectedType(ProfileType.Custom)} />
             <TypeCard label="Import QR" selected={selectedType === ProfileType.Other} onPress={() => setSelectedType(ProfileType.Other)} />
-          </View>
+          </ScrollView>
 
           <Field label="Nickname" value={nickname} onChangeText={setNickname} placeholder="Home Account" />
 
@@ -114,8 +140,34 @@ export function CreateProfileScreen({ onCancel, onSaved }: CreateProfileScreenPr
             />
           )}
 
+          {selectedType === ProfileType.Custom && (
+            <Field
+              label="Text"
+              value={text}
+              onChangeText={setText}
+              placeholder="Write something to wrap in QR..."
+              multiline
+              numberOfLines={5}
+              maxLength={120}
+            />
+          )}
+
           {selectedType === ProfileType.Other && (
-            <Field label="Imported QR Image" value={qrImagePath} onChangeText={setQrImagePath} placeholder="local/path/to/qr.png" autoCapitalize="none" />
+            <View style={styles.imagePickerSection}>
+              <Text style={styles.label}>Imported QR Image</Text>
+              {imagePath ? (
+                <View style={styles.imagePreviewContainer}>
+                  <Image source={{ uri: imagePath }} style={styles.imagePreview} resizeMode="contain" />
+                  <Pressable onPress={handlePickImage} style={styles.changeImageButton}>
+                    <Text style={styles.changeImageButtonText}>Change Image</Text>
+                  </Pressable>
+                </View>
+              ) : (
+                <Pressable onPress={handlePickImage} style={styles.pickImageButton}>
+                  <Text style={styles.pickImageButtonText}>Pick QR Image from Gallery</Text>
+                </Pressable>
+              )}
+            </View>
           )}
 
           {formError && <Text style={styles.error}>{formError}</Text>}
@@ -132,7 +184,8 @@ interface BuildCreateProfileDataInput {
   minimumAmount: string;
   defaultDescription: string;
   mobileNumber: string;
-  qrImagePath: string;
+  imagePath: string;
+  text: string;
 }
 
 function buildCreateProfileData(input: BuildCreateProfileDataInput): CreateProfileData {
@@ -160,10 +213,19 @@ function buildCreateProfileData(input: BuildCreateProfileDataInput): CreateProfi
     };
   }
 
+  if (input.selectedType === ProfileType.Custom) {
+    return {
+      ...common,
+      type: ProfileType.Custom,
+      text: input.text,
+    };
+  }
+
   return {
     ...common,
     type: ProfileType.Other,
-    qrImagePath: input.qrImagePath,
+    imagePath: input.imagePath,
+    extractedText: null,
   };
 }
 
@@ -189,16 +251,30 @@ function TypeCard({ label, selected, onPress }: TypeCardProps): React.JSX.Elemen
 interface FieldProps {
   label: string;
   value: string;
-  placeholder: string;
-  onChangeText: (value: string) => void;
-  keyboardType?: 'default' | 'decimal-pad' | 'phone-pad';
-  autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
+  placeholder?: string;
+  onChangeText: (text: string) => void;
+  keyboardType?: KeyboardTypeOptions;
+  autoCapitalize?: TextInputProps['autoCapitalize'];
+  multiline?: boolean;
+  numberOfLines?: number;
+  maxLength?: number;
 }
 
-function Field({ label, value, placeholder, onChangeText, keyboardType = 'default', autoCapitalize = 'sentences' }: FieldProps): React.JSX.Element {
+function Field({
+  label,
+  value,
+  placeholder,
+  onChangeText,
+  keyboardType = "default",
+  autoCapitalize = "sentences",
+  multiline = false,
+  numberOfLines = 1,
+  maxLength,
+}: FieldProps): React.JSX.Element {
   return (
     <View style={styles.fieldGroup}>
       <Text style={styles.label}>{label}</Text>
+
       <TextInput
         accessibilityLabel={label}
         accessibilityHint={`Enter ${label}`}
@@ -207,9 +283,22 @@ function Field({ label, value, placeholder, onChangeText, keyboardType = 'defaul
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor="#94A3B8"
-        style={styles.input}
         value={value}
+        multiline={multiline}
+        numberOfLines={numberOfLines}
+        maxLength={maxLength}
+        textAlignVertical={multiline ? "top" : "center"}
+        style={[
+          styles.input,
+          multiline && styles.textArea,
+        ]}
       />
+
+      {maxLength && (
+        <Text style={styles.counter}>
+          {value.length}/{maxLength}
+        </Text>
+      )}
     </View>
   );
 }
@@ -251,6 +340,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#CBD5E1',
     backgroundColor: '#FFFFFF',
+    minWidth: 100,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
@@ -286,6 +376,20 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     fontSize: 16,
     paddingHorizontal: 12,
+  },
+  textArea: {
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: "#CBD5E1",
+    borderRadius: 8,
+    padding: 12,
+    textAlignVertical: "top",
+  },
+  counter: {
+    alignSelf: "flex-end",
+    marginTop: 4,
+    color: "#64748B",
+    fontSize: 12,
   },
   primaryButton: {
     minHeight: 48,
@@ -323,6 +427,49 @@ const styles = StyleSheet.create({
   error: {
     marginTop: 6,
     color: '#DC2626',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  imagePickerSection: {
+    marginBottom: 20,
+  },
+  pickImageButton: {
+    minHeight: 120,
+    borderRadius: 8,
+    borderWidth: 2,
+    borderStyle: 'dashed',
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  pickImageButtonText: {
+    color: '#64748B',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  imagePreviewContainer: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  imagePreview: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  changeImageButton: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  changeImageButtonText: {
+    color: '#2563EB',
     fontSize: 14,
     fontWeight: '600',
   },

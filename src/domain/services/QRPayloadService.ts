@@ -1,4 +1,4 @@
-import { UPIProfile, WhatsAppProfile } from '@domain/models/Profile';
+import { CustomProfile, UPIProfile, WhatsAppProfile } from '@domain/models/Profile';
 import { ValidationService } from '@domain/services/ValidationService';
 
 export class QRPayloadService {
@@ -21,5 +21,9 @@ export class QRPayloadService {
 
   static createWhatsAppPayload(profile: WhatsAppProfile): string {
     return `https://wa.me/${ValidationService.validateMobileNumber(profile.mobileNumber)}`;
+  }
+
+  static createCustomPayload(profile: CustomProfile): string {
+    return profile.text?.trim() || '';
   }
 }

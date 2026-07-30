@@ -1,5 +1,6 @@
 import { BackupV1 } from '@domain/services/ExportService';
 import {
+  CustomProfile,
   OtherProfile,
   Profile,
   ProfileType,
@@ -10,6 +11,7 @@ import {
 export type CreateProfileData =
   | Omit<UPIProfile, 'id' | 'avatarColor' | 'displayOrder' | 'createdAt' | 'updatedAt'>
   | Omit<WhatsAppProfile, 'id' | 'avatarColor' | 'displayOrder' | 'createdAt' | 'updatedAt'>
+  | Omit<CustomProfile, 'id' | 'avatarColor' | 'displayOrder' | 'createdAt' | 'updatedAt'>
   | Omit<OtherProfile, 'id' | 'avatarColor' | 'displayOrder' | 'createdAt' | 'updatedAt'>;
 
 export interface CreateProfileInput {

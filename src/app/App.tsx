@@ -28,6 +28,7 @@ export function App(): React.JSX.Element {
   const homeOpacity = useRef(new Animated.Value(0)).current;
   const [showSplash, setShowSplash] = useState(true);
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState<boolean | null>(null);
+  const [selectProfileId, setSelectProfileId] = useState<Profile | null>(null)
 
   useEffect(() => {
     let isMounted = true;
@@ -122,10 +123,17 @@ export function App(): React.JSX.Element {
                   onGoToSettings={() => setCurrentScreen('settings')}
                   initialDefaultProfile={initialDefaultProfile}
                   initialDefaultPayload={initialDefaultPayload}
+                  selectProfileId={selectProfileId}
                 />
               )}
               {currentScreen === 'createProfile' && (
-                <CreateProfileScreen onCancel={() => setCurrentScreen('home')} onSaved={() => setCurrentScreen('home')} />
+                <CreateProfileScreen
+                  onCancel={() => setCurrentScreen('home')}
+                  onSaved={ (profile) => {
+                        setSelectProfileId(profile);
+                        setCurrentScreen('home');
+                      }}
+                />
               )}
               {currentScreen === 'editProfile' && editingProfile && (
                 <EditProfileScreen
@@ -134,6 +142,7 @@ export function App(): React.JSX.Element {
                   onDelete={() => setCurrentScreen('home')}
                   onSaved={(profile) => {
                     setEditingProfile(profile);
+                    setSelectProfileId(profile);
                     setCurrentScreen('home');
                   }}
                 />

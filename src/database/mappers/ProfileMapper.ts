@@ -4,6 +4,7 @@ import {
   ProfileType,
   UPIProfile,
   WhatsAppProfile,
+  CustomProfile,
 } from '@domain/models/Profile';
 import { SqlRow } from '@database/sqlite/SqlClient';
 
@@ -21,7 +22,9 @@ export interface ProfileRow extends SqlRow {
   minimumAmount: number | null;
   defaultDescription: string | null;
   mobileNumber: string | null;
-  qrImagePath: string | null;
+  imagePath: string | null;
+  text: string | null;
+  extractedText: string | null;
 }
 
 export class ProfileMapper {
@@ -55,10 +58,19 @@ export class ProfileMapper {
       } satisfies WhatsAppProfile;
     }
 
+    if (row.type === ProfileType.Custom) {
+      return {
+        ...base,
+        type: ProfileType.Custom,
+        text: requireColumn(row.text, 'text'),
+      } satisfies CustomProfile;
+    }
+
     return {
       ...base,
       type: ProfileType.Other,
-      qrImagePath: requireColumn(row.qrImagePath, 'qrImagePath'),
+      imagePath: requireColumn(row.imagePath, 'imagePath'),
+      extractedText: row.extractedText ?? null,
     } satisfies OtherProfile;
   }
 }

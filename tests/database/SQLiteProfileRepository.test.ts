@@ -24,7 +24,8 @@ class ProfileSqlClient implements SqlClient {
   readonly profiles = new Map<string, BaseRecord>();
   readonly upiProfiles = new Map<string, { upiId: string; minimumAmount: number | null; defaultDescription: string | null }>();
   readonly whatsappProfiles = new Map<string, { mobileNumber: string }>();
-  readonly otherProfiles = new Map<string, { qrImagePath: string }>();
+  readonly customProfiles = new Map<string, { text: string }>();
+  readonly otherProfiles = new Map<string, { imagePath: string; extractedText: string | null }>();
   defaultProfileId: string | null = null;
 
   async execute<T extends SqlRow = SqlRow>(sql: string, params: SqlValue[] = []): Promise<SqlResult<T>> {
@@ -87,8 +88,37 @@ class ProfileSqlClient implements SqlClient {
       return empty<T>(1);
     }
 
+    if (normalized.startsWith('INSERT INTO custom_profiles')) {
+      this.customProfiles.set(params[0] as string, { text: params[1] as string });
+      return empty<T>(1);
+    }
+
     if (normalized.startsWith('INSERT INTO other_profiles')) {
-      this.otherProfiles.set(params[0] as string, { qrImagePath: params[1] as string });
+      this.otherProfiles.set(params[0] as string, { imagePath: params[1] as string, extractedText: params[2] as string | null });
+      return empty<T>(1);
+    }
+
+    if (normalized.startsWith('UPDATE upi_profiles')) {
+      this.upiProfiles.set(params[3] as string, {
+        upiId: params[0] as string,
+        minimumAmount: params[1] as number | null,
+        defaultDescription: params[2] as string | null,
+      });
+      return empty<T>(1);
+    }
+
+    if (normalized.startsWith('UPDATE whatsapp_profiles')) {
+      this.whatsappProfiles.set(params[1] as string, { mobileNumber: params[0] as string });
+      return empty<T>(1);
+    }
+
+    if (normalized.startsWith('UPDATE custom_profiles')) {
+      this.customProfiles.set(params[1] as string, { text: params[0] as string });
+      return empty<T>(1);
+    }
+
+    if (normalized.startsWith('UPDATE other_profiles')) {
+      this.otherProfiles.set(params[2] as string, { imagePath: params[0] as string, extractedText: params[1] as string | null });
       return empty<T>(1);
     }
 
@@ -131,6 +161,11 @@ class ProfileSqlClient implements SqlClient {
       return empty<T>(1);
     }
 
+    if (normalized === 'DELETE FROM custom_profiles') {
+      this.customProfiles.clear();
+      return empty<T>(1);
+    }
+
     if (normalized === 'DELETE FROM other_profiles') {
       this.otherProfiles.clear();
       return empty<T>(1);
@@ -148,6 +183,11 @@ class ProfileSqlClient implements SqlClient {
 
     if (normalized.startsWith('DELETE FROM whatsapp_profiles')) {
       this.whatsappProfiles.delete(params[0] as string);
+      return empty<T>(1);
+    }
+
+    if (normalized.startsWith('DELETE FROM custom_profiles')) {
+      this.customProfiles.delete(params[0] as string);
       return empty<T>(1);
     }
 
@@ -224,6 +264,7 @@ class ProfileSqlClient implements SqlClient {
   private toJoinedRow(profile: BaseRecord): SqlRow {
     const upi = this.upiProfiles.get(profile.id);
     const whatsapp = this.whatsappProfiles.get(profile.id);
+    const custom = this.customProfiles.get(profile.id);
     const other = this.otherProfiles.get(profile.id);
 
     return {
@@ -232,13 +273,15 @@ class ProfileSqlClient implements SqlClient {
       minimumAmount: upi?.minimumAmount ?? null,
       defaultDescription: upi?.defaultDescription ?? null,
       mobileNumber: whatsapp?.mobileNumber ?? null,
-      qrImagePath: other?.qrImagePath ?? null,
+      text: custom?.text ?? null,
+      imagePath: other?.imagePath ?? null,
+      extractedText: other?.extractedText ?? null,
     };
   }
 }
 
 class ProfileSettingsRepository implements SettingsRepository {
-  constructor(private readonly db: ProfileSqlClient) {}
+  constructor(private readonly db: ProfileSqlClient) { }
 
   async getSettings(): Promise<Settings> {
     return {
@@ -419,7 +462,7 @@ test('profile repository restores backup successfully', async () => {
   assert.equal(restoredProfiles[0].nickname, 'Imported UPI');
   assert.equal(restoredProfiles[1].nickname, 'Imported WhatsApp');
   assert.equal(db.defaultProfileId, 'backup-upi-1');
-  
+
   // Existing profile must be deleted
   assert.equal(restoredProfiles.some((p) => p.nickname === 'Existing'), false);
 });

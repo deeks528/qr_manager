@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_profiles (
 
 CREATE TABLE IF NOT EXISTS other_profiles (
   profileId TEXT PRIMARY KEY,
-  qrImagePath TEXT NOT NULL,
+  imagePath TEXT NOT NULL,
   FOREIGN KEY (profileId) REFERENCES profiles(id) ON DELETE CASCADE
 );
 

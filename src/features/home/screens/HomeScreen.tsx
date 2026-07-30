@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Alert, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View, ScrollView } from 'react-native';
+import { Alert, Pressable, SafeAreaView, StyleSheet, Text, TextInput, View, ScrollView, Image } from 'react-native';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { useSettings } from '@features/settings';
@@ -19,9 +19,10 @@ interface HomeScreenProps {
   onGoToSettings: () => void;
   initialDefaultProfile?: Profile | null;
   initialDefaultPayload?: string | null;
+  selectProfileId?: Profile | null;
 }
 
-export function HomeScreen({ onCreateProfile, onEditProfile, onGoToSettings, initialDefaultProfile, initialDefaultPayload }: HomeScreenProps): React.JSX.Element {
+export function HomeScreen({ onCreateProfile, onEditProfile, onGoToSettings, initialDefaultProfile, initialDefaultPayload, selectProfileId }: HomeScreenProps): React.JSX.Element {
   const settingsQuery = useSettings();
   const defaultProfileQuery = useDefaultProfile(
     settingsQuery.data?.defaultProfileId ?? null,
@@ -30,7 +31,7 @@ export function HomeScreen({ onCreateProfile, onEditProfile, onGoToSettings, ini
   const quickProfilesQuery = useQuickProfiles();
   const profilesQuery = useProfiles();
   const setDefaultProfile = useSetDefaultProfile();
-  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(null);
+  const [selectedProfileId, setSelectedProfileId] = useState<string | null>(selectProfileId?.id ?? null);
   const [runtimeAmountText, setRuntimeAmountText] = useState('');
   const [actionError, setActionError] = useState<string | null>(null);
   const runtimeAmount = parseRuntimeAmount(runtimeAmountText);
@@ -38,26 +39,49 @@ export function HomeScreen({ onCreateProfile, onEditProfile, onGoToSettings, ini
   const settings = settingsQuery.data
 
   const fallbackProfileId = defaultProfileQuery.data?.id ?? settingsQuery.data?.defaultProfileId ?? profiles[0]?.id ?? null;
-  const selectedProfile = useMemo(
-    () => profiles.find((profile) => profile.id === selectedProfileId) ?? defaultProfileQuery.data ?? profiles[0] ?? null,
-    [defaultProfileQuery.data, profiles, selectedProfileId],
-  );
+
+  const selectedProfile = useMemo(() => {
+    // 1. Try to find the explicitly selected ID in the profiles list
+    const fromList = profiles.find((p) => p.id === selectedProfileId);
+    if (fromList) return fromList;
+
+    // 2. If not in list (might be stale), use the profile object passed from props
+    if (selectProfileId && selectedProfileId === selectProfileId.id) {
+      return selectProfileId;
+    }
+
+    // 3. Fallback to default or first available profile
+    return defaultProfileQuery.data ?? profiles[0] ?? null;
+  }, [profiles, selectedProfileId, selectProfileId, defaultProfileQuery.data]);
+
   const [useInitialPayload, setUseInitialPayload] = useState(true);
 
   useEffect(() => {
     setUseInitialPayload(false);
-  }, [selectedProfile]);
+  }, [selectedProfile?.id]);
 
   useEffect(() => {
+    // Sync internal state with the prop from App.tsx (important after creation/edit)
+    if (selectProfileId?.id) {
+      setSelectedProfileId(selectProfileId.id);
+    }
+  }, [selectProfileId?.id]);
+
+  useEffect(() => {
+    // Handle automatic selection of fallback if current is invalid
     if (!selectedProfileId && fallbackProfileId) {
       setSelectedProfileId(fallbackProfileId);
       return;
     }
 
-    if (selectedProfileId && profiles.length > 0 && !profiles.some((profile) => profile.id === selectedProfileId)) {
+    // Only reset if we are NOT using the recently selected prop
+    const isRecentlySelected = selectedProfileId === selectProfileId?.id;
+    const existsInList = profiles.some((p) => p.id === selectedProfileId);
+
+    if (selectedProfileId && profiles.length > 0 && !existsInList && !isRecentlySelected) {
       setSelectedProfileId(fallbackProfileId);
     }
-  }, [fallbackProfileId, profiles, selectedProfileId]);
+  }, [fallbackProfileId, profiles, selectedProfileId, selectProfileId?.id]);
 
   useEffect(() => {
     setRuntimeAmountText('');
@@ -125,7 +149,17 @@ export function HomeScreen({ onCreateProfile, onEditProfile, onGoToSettings, ini
           <PreviewSkeleton />
         ) : selectedProfile ? (
           <>
-            <QRPreview profile={selectedProfile} runtimeAmount={runtimeAmount} initialPayload={useInitialPayload && selectedProfile.id === defaultProfileQuery.data?.id ? initialDefaultPayload : undefined} />
+            {selectedProfile.type === ProfileType.Other ? (
+              <>
+              <Image
+                source = {{ uri: selectedProfile.imagePath }}
+                style={styles.image}
+                resizeMode="contain"
+              />
+              </>
+            ):(
+              <QRPreview profile={selectedProfile} runtimeAmount={runtimeAmount} initialPayload={useInitialPayload && selectedProfile.id === defaultProfileQuery.data?.id ? initialDefaultPayload : undefined} />
+            )}
             <Text style={styles.profileName}>{selectedProfile.nickname}</Text>
             <Text style={styles.profileMeta}>{getProfileMeta(selectedProfile)}</Text>
             {selectedProfile.type === ProfileType.UPI && (
@@ -185,7 +219,9 @@ export function HomeScreen({ onCreateProfile, onEditProfile, onGoToSettings, ini
 
       <View style={styles.listSection}>
         <Text style={styles.sectionTitle}>Profiles</Text>
-        <ScrollView>
+        <ScrollView
+          showsVerticalScrollIndicator={true}
+        >
             {profilesQuery.isLoading ? (
               <ListSkeleton />
             ) : (
@@ -292,6 +328,9 @@ function getProfileMeta(profile: Profile): string {
   if (profile.type === ProfileType.WhatsApp) {
     return profile.mobileNumber;
   }
+
+ if (profile.type === ProfileType.Custom)
+   return `${profile.text.slice(0,10)}${profile.text.length>10 ? '...' : ''}`
 
   return 'Imported QR';
 }
@@ -550,5 +589,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderRadius: 8,
     backgroundColor: '#E2E8F0',
+  },
+  image: {
+    width: 240,
+    height: 240,
+    alignSelf: "center",
   },
 });

@@ -1,5 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
+  Alert,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -9,21 +11,24 @@ import {
   Text,
   TextInput,
   View,
-  Alert,
 } from 'react-native';
 
 import { useDeleteProfile } from '@features/home/hooks/useHomeProfiles';
 import { Profile, ProfileType } from '@domain/models/Profile';
 import { useUpdateProfile } from '@features/profile/hooks/useUpdateProfile';
+import { getImage } from '../hooks/getImage';
 
 interface EditProfileScreenProps {
   profile: Profile;
   onCancel: () => void;
   onSaved: (profile: Profile) => void;
+  onDelete: () => void;
 }
 
 export function EditProfileScreen({ profile, onCancel, onSaved, onDelete }: EditProfileScreenProps): React.JSX.Element {
   const updateProfile = useUpdateProfile();
+  const deleteProfile = useDeleteProfile();
+
   const [nickname, setNickname] = useState(profile.nickname);
   const [upiId, setUpiId] = useState(profile.type === ProfileType.UPI ? profile.upiId : '');
   const [minimumAmount, setMinimumAmount] = useState(
@@ -33,11 +38,28 @@ export function EditProfileScreen({ profile, onCancel, onSaved, onDelete }: Edit
     profile.type === ProfileType.UPI ? profile.defaultDescription ?? '' : '',
   );
   const [mobileNumber, setMobileNumber] = useState(profile.type === ProfileType.WhatsApp ? profile.mobileNumber : '');
+  const [text, setText] = useState(profile.type === ProfileType.Custom ? profile.text : '');
+  const [imagePath, setImagePath] = useState(profile.type === ProfileType.Other ? profile.imagePath : '');
   const [formError, setFormError] = useState<string | null>(null);
 
-  const canSave = useMemo(() => nickname.trim().length > 0 && !updateProfile.isPending, [nickname, updateProfile.isPending]);
-  const deleteProfile = useDeleteProfile();
-    const isActionPending = deleteProfile.isPending;
+  const canSave = useMemo(() => {
+    const hasNickname = nickname.trim().length > 0;
+    const hasTypeData = profile.type !== ProfileType.Other || imagePath.trim().length > 0;
+    return hasNickname && hasTypeData && !updateProfile.isPending;
+  }, [nickname, updateProfile.isPending, profile.type, imagePath]);
+
+  const isActionPending = deleteProfile.isPending || updateProfile.isPending;
+
+  const handlePickImage = async () => {
+    try {
+      const path = await getImage();
+      if (path) {
+        setImagePath(path);
+      }
+    } catch (error) {
+      setFormError('Failed to pick image');
+    }
+  };
 
   const handleSave = (): void => {
     setFormError(null);
@@ -48,6 +70,8 @@ export function EditProfileScreen({ profile, onCancel, onSaved, onDelete }: Edit
       minimumAmount,
       defaultDescription,
       mobileNumber,
+      text,
+      imagePath,
     });
 
     updateProfile.mutate(updatedProfile, {
@@ -57,24 +81,20 @@ export function EditProfileScreen({ profile, onCancel, onSaved, onDelete }: Edit
   };
 
   const handleDelete = (): void => {
-      if (!profile) {
-        return;
-      }
-
-      Alert.alert('Delete Profile', `Delete ${profile.nickname}?`, [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            setFormError(null);
-            deleteProfile.mutate(profile.id, {
-              onSuccess: onDelete,
-              onError: (error) => setFormError(error.message),
-            });
-          },
+    Alert.alert('Delete Profile', `Delete ${profile.nickname}?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: () => {
+          setFormError(null);
+          deleteProfile.mutate(profile.id, {
+            onSuccess: onDelete,
+            onError: (error) => setFormError(error.message),
+          });
         },
-      ]);
+      },
+    ]);
   };
 
   return (
@@ -86,13 +106,13 @@ export function EditProfileScreen({ profile, onCancel, onSaved, onDelete }: Edit
               <Text style={styles.secondaryButtonText}>Cancel</Text>
             </Pressable>
             <Pressable
-                            accessibilityLabel="Delete profile"
-                            accessibilityHint="Deletes this profile after confirmation"
-                            disabled={isActionPending}
-                            onPress={handleDelete}
-                            style={[styles.destructiveButton, isActionPending && styles.disabledActionButton]}
+              accessibilityLabel="Delete profile"
+              accessibilityHint="Deletes this profile after confirmation"
+              disabled={isActionPending}
+              onPress={handleDelete}
+              style={[styles.destructiveButton, isActionPending && styles.disabledActionButton]}
             >
-                <Text style={styles.destructiveButtonText}>{deleteProfile.isPending ? 'Deleting' : 'Delete'}</Text>
+              <Text style={styles.destructiveButtonText}>{deleteProfile.isPending ? 'Deleting' : 'Delete'}</Text>
             </Pressable>
           </View>
 
@@ -132,26 +152,37 @@ export function EditProfileScreen({ profile, onCancel, onSaved, onDelete }: Edit
             />
           )}
 
-          {profile.type === ProfileType.Other && (
+          {profile.type === ProfileType.Custom && (
             <Field
-              editable={false}
-              label="Imported QR Image"
-              value={profile.qrImagePath}
-              onChangeText={() => undefined}
-              placeholder="local/path/to/qr.png"
-              autoCapitalize="none"
+              label="Text"
+              value={text}
+              onChangeText={setText}
+              placeholder="QR content..."
+              multiline
             />
           )}
 
-          <View>
+          {profile.type === ProfileType.Other && (
+            <View style={styles.imagePickerSection}>
+              <Text style={styles.label}>Imported QR Image</Text>
+              <View style={styles.imagePreviewContainer}>
+                <Image source={{ uri: imagePath }} style={styles.imagePreview} resizeMode="contain" />
+                <Pressable onPress={handlePickImage} style={styles.changeImageButton}>
+                  <Text style={styles.changeImageButtonText}>Change Image</Text>
+                </Pressable>
+              </View>
+            </View>
+          )}
+
+          <View style={styles.footer}>
             <Pressable
-                          accessibilityLabel="Save profile changes"
-                          accessibilityHint="Updates this QR profile"
-                          disabled={!canSave}
-                          onPress={handleSave}
-                          style={[styles.primaryButton, !canSave && styles.disabledButton]}
-                    >
-                <Text style={styles.primaryButtonText}>{updateProfile.isPending ? 'Saving' : 'Save'}</Text>
+              accessibilityLabel="Save profile changes"
+              accessibilityHint="Updates this QR profile"
+              disabled={!canSave}
+              onPress={handleSave}
+              style={[styles.primaryButton, !canSave && styles.disabledButton]}
+            >
+              <Text style={styles.primaryButtonText}>{updateProfile.isPending ? 'Saving' : 'Save'}</Text>
             </Pressable>
           </View>
 
@@ -169,43 +200,57 @@ interface BuildUpdatedProfileInput {
   minimumAmount: string;
   defaultDescription: string;
   mobileNumber: string;
+  text: string;
+  imagePath: string;
 }
 
 function buildUpdatedProfile(input: BuildUpdatedProfileInput): Profile {
-  if (input.profile.type === ProfileType.UPI) {
+  const base = {
+    ...input.profile,
+    nickname: input.nickname,
+  };
+
+  if (base.type === ProfileType.UPI) {
     return {
-      ...input.profile,
-      nickname: input.nickname,
+      ...base,
       upiId: input.upiId,
       minimumAmount: input.minimumAmount.trim() ? Number(input.minimumAmount) : null,
       defaultDescription: input.defaultDescription.trim() || null,
     };
   }
 
-  if (input.profile.type === ProfileType.WhatsApp) {
+  if (base.type === ProfileType.WhatsApp) {
     return {
-      ...input.profile,
-      nickname: input.nickname,
+      ...base,
       mobileNumber: input.mobileNumber,
     };
   }
 
-  return {
-    ...input.profile,
-    nickname: input.nickname,
-  };
+  if (base.type === ProfileType.Custom) {
+    return {
+      ...base,
+      text: input.text,
+    };
+  }
+
+  if (base.type === ProfileType.Other) {
+    return {
+      ...base,
+      imagePath: input.imagePath,
+    };
+  }
+
+  return base;
 }
 
 function getProfileTypeLabel(type: ProfileType): string {
-  if (type === ProfileType.UPI) {
-    return 'UPI';
+  switch (type) {
+    case ProfileType.UPI: return 'UPI';
+    case ProfileType.WhatsApp: return 'WhatsApp';
+    case ProfileType.Custom: return 'Custom';
+    case ProfileType.Other: return 'Import QR';
+    default: return 'Other';
   }
-
-  if (type === ProfileType.WhatsApp) {
-    return 'WhatsApp';
-  }
-
-  return 'Import QR';
 }
 
 interface FieldProps {
@@ -216,6 +261,7 @@ interface FieldProps {
   keyboardType?: 'default' | 'decimal-pad' | 'phone-pad';
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   editable?: boolean;
+  multiline?: boolean;
 }
 
 function Field({
@@ -226,6 +272,7 @@ function Field({
   keyboardType = 'default',
   autoCapitalize = 'sentences',
   editable = true,
+  multiline = false,
 }: FieldProps): React.JSX.Element {
   return (
     <View style={styles.fieldGroup}>
@@ -239,8 +286,13 @@ function Field({
         onChangeText={onChangeText}
         placeholder={placeholder}
         placeholderTextColor="#94A3B8"
-        style={[styles.input, !editable && styles.readOnlyInput]}
+        style={[
+          styles.input,
+          !editable && styles.readOnlyInput,
+          multiline && { minHeight: 100, textAlignVertical: 'top' }
+        ]}
         value={value}
+        multiline={multiline}
       />
     </View>
   );
@@ -308,6 +360,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
     color: '#475569',
   },
+  footer: {
+    marginTop: 8,
+  },
   primaryButton: {
     minHeight: 48,
     minWidth: 88,
@@ -350,9 +405,6 @@ const styles = StyleSheet.create({
   disabledActionButton: {
     backgroundColor: '#E2E8F0',
   },
-  disabledActionButtonText: {
-    color: '#64748B',
-  },
   destructiveButton: {
     minHeight: 48,
     borderRadius: 8,
@@ -365,5 +417,32 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '700',
+  },
+  imagePickerSection: {
+    marginBottom: 20,
+  },
+  imagePreviewContainer: {
+    marginTop: 8,
+    alignItems: 'center',
+  },
+  imagePreview: {
+    width: '100%',
+    height: 200,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+  },
+  changeImageButton: {
+    marginTop: 12,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 6,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  changeImageButtonText: {
+    color: '#2563EB',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

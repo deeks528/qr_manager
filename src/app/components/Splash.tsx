@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { SafeAreaView, StyleSheet, Text, View, ActivityIndicator, Animated } from 'react-native';
+import { SafeAreaView, StyleSheet, Text, View, ActivityIndicator, Animated, Image } from 'react-native';
 
 interface SplashProps {
     title?: string;
@@ -30,7 +30,11 @@ export function Splash({ title = 'Universal QR Profile Manager', subtitle = 'Sta
         <SafeAreaView style={styles.centered}>
             <View style={styles.content}>
                 <Animated.View style={[styles.iconContainer, { transform: [{ scale: pulseAnim }] }]}>
-                    <Text style={styles.iconText}>📱</Text>
+                    <Image
+                        source={require('../../../assets/logo.jpg')}
+                        style={styles.logo}
+                        resizeMode="cover"
+                    />
                 </Animated.View>
                 <Text style={styles.title}>{title}</Text>
                 <ActivityIndicator size="large" color="#2563EB" style={styles.spinner} />
@@ -52,15 +56,20 @@ const styles = StyleSheet.create({
         padding: 24,
     },
     iconContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
-        backgroundColor: '#EFF6FF',
+        width: 100,
+        height: 100,
+        borderRadius: 50,
+        backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 24,
         borderWidth: 2,
         borderColor: '#BFDBFE',
+        overflow: 'hidden', // Ensure image stays within the circle
+    },
+    logo: {
+        width: '100%',
+        height: '100%',
     },
     iconText: {
         fontSize: 40,

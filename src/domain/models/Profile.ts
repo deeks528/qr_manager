@@ -1,7 +1,8 @@
 export enum ProfileType {
-  UPI = 0,
-  WhatsApp = 1,
-  Other = 2,
+  UPI,
+  WhatsApp,
+  Custom,
+  Other,
 }
 
 export interface BaseProfile {
@@ -28,12 +29,18 @@ export interface WhatsAppProfile extends BaseProfile {
   mobileNumber: string;
 }
 
-export interface OtherProfile extends BaseProfile {
-  type: ProfileType.Other;
-  qrImagePath: string;
+export interface CustomProfile extends BaseProfile {
+  type: ProfileType.Custom;
+  text: string;
 }
 
-export type Profile = UPIProfile | WhatsAppProfile | OtherProfile;
+export interface OtherProfile extends BaseProfile {
+  type: ProfileType.Other;
+  imagePath: string;
+  extractedText: string | null;
+}
+
+export type Profile = UPIProfile | WhatsAppProfile | CustomProfile | OtherProfile;
 
 export const MAX_PROFILES = 10;
 export const MAX_QUICK_PROFILES = 4;
