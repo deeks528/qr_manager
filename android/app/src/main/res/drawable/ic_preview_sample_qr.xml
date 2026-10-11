@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- White background -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0 h100 v100 h-100 z" />
+
+    <!-- Top-Left Finder Outer -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M8,8 h28 v28 h-28 z M14,14 v16 h16 v-16 z" />
+    <!-- Top-Left Finder Inner -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M18,18 h8 v8 h-8 z" />
+
+    <!-- Top-Right Finder Outer -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M64,8 h28 v28 h-28 z M70,14 v16 h16 v-16 z" />
+    <!-- Top-Right Finder Inner -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M74,18 h8 v8 h-8 z" />
+
+    <!-- Bottom-Left Finder Outer -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M8,64 h28 v28 h-28 z M14,70 v16 h16 v-16 z" />
+    <!-- Bottom-Left Finder Inner -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="M18,74 h8 v8 h-8 z" />
+
+    <!-- Timing Patterns and Data Modules -->
+    <path
+        android:fillColor="#0F172A"
+        android:pathData="
+            M42,10 h6 v6 h-6 z
+            M52,10 h6 v6 h-6 z
+            M42,22 h6 v6 h-6 z
+            M52,22 h6 v6 h-6 z
+            M10,42 h6 v6 h-6 z
+            M22,42 h6 v6 h-6 z
+            M34,42 h6 v6 h-6 z
+            M46,42 h8 v8 h-8 z
+            M60,42 h6 v6 h-6 z
+            M72,42 h6 v6 h-6 z
+            M84,42 h6 v6 h-6 z
+            M42,54 h6 v6 h-6 z
+            M54,54 h8 v8 h-8 z
+            M68,54 h6 v6 h-6 z
+            M80,54 h8 v8 h-8 z
+            M42,66 h6 v6 h-6 z
+            M54,66 h6 v6 h-6 z
+            M66,66 h8 v8 h-8 z
+            M82,66 h6 v6 h-6 z
+            M42,78 h8 v8 h-8 z
+            M56,78 h6 v6 h-6 z
+            M68,78 h8 v8 h-8 z
+            M84,78 h6 v6 h-6 z
+            M42,88 h6 v6 h-6 z
+            M54,88 h8 v8 h-8 z
+            M70,88 h6 v6 h-6 z
+            M82,88 h6 v6 h-6 z" />
+</vector>

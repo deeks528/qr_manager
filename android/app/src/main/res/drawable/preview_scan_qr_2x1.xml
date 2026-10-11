@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@drawable/widget_background" />
+    <item
+        android:width="70dp"
+        android:height="40dp"
+        android:drawable="@drawable/ic_widget_scan_purple_wave"
+        android:gravity="bottom|end" />
+    <item
+        android:width="36dp"
+        android:height="36dp"
+        android:drawable="@drawable/ic_widget_scan_icon"
+        android:gravity="start|center_vertical"
+        android:start="16dp" />
+    <item
+        android:width="14dp"
+        android:height="14dp"
+        android:drawable="@drawable/ic_chevron_right_small"
+        android:gravity="end|center_vertical"
+        android:end="16dp" />
+</layer-list>

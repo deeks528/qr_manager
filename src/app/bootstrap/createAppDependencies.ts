@@ -7,9 +7,13 @@ import { initializeSchema } from '@database/sqlite/initializeSchema';
 import { MMKVStartupCache } from '@database/native/MMKVStartupCache';
 import { ReactNativeSQLiteClient } from '@database/native/ReactNativeSQLiteClient';
 
+import { QuickMessagesRepository } from '@database/repositories/QuickMessagesRepository';
+import { SQLiteQuickMessagesRepository } from '@database/repositories/SQLiteQuickMessagesRepository';
+
 export interface AppDependencies {
   settingsRepository: SettingsRepository;
   profileRepository: ProfileRepository;
+  quickMessagesRepository: QuickMessagesRepository;
 }
 
 export async function createAppDependencies(): Promise<AppDependencies> {
@@ -24,5 +28,6 @@ console.log('createAppDependencies completed');
   return {
     settingsRepository,
     profileRepository: new SQLiteProfileRepository(db, settingsRepository),
+    quickMessagesRepository: new SQLiteQuickMessagesRepository(db),
   };
 }

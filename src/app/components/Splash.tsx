@@ -6,7 +6,7 @@ interface SplashProps {
     subtitle?: string;
 }
 
-export function Splash({ title = 'Universal QR Profile Manager', subtitle = 'Starting up...' }: SplashProps) {
+export function Splash({ title = 'QR Profile Manager', subtitle = 'Starting up...' }: SplashProps) {
     const pulseAnim = useRef(new Animated.Value(0.8)).current;
 
     useEffect(() => {

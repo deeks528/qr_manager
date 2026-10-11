@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="65dp"
+    android:height="65dp"
+    android:viewportWidth="65"
+    android:viewportHeight="65">
+    <!-- Subtle faded purple QR block pattern -->
+    <path
+        android:fillColor="#157C3AED"
+        android:pathData="M 35,35 H 45 V 45 H 35 Z M 50,35 H 60 V 45 H 50 Z M 35,50 H 45 V 60 H 35 Z M 50,50 H 60 V 60 H 50 Z M 20,40 H 30 V 50 H 20 Z M 40,20 H 50 V 30 H 40 Z M 52,22 H 62 V 32 H 52 Z M 25,55 H 32 V 62 H 25 Z" />
+</vector>

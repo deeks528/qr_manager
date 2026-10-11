@@ -9,17 +9,21 @@ interface QRPreviewProps {
   profile: Profile;
   runtimeAmount?: number | null;
   initialPayload?: string | null | undefined;
+  size?: number;
 }
 
-export function QRPreview({ profile, runtimeAmount, initialPayload }: QRPreviewProps): React.JSX.Element {
+export function QRPreview({ profile, runtimeAmount, initialPayload, size = 204 }: QRPreviewProps): React.JSX.Element {
   if (profile.type === ProfileType.Other) {
+    if (!profile.imagePath) {
+      return <QRPreviewFallback size={size} />;
+    }
     return (
-      <View style={styles.qrFrame}>
+      <View style={[styles.qrContainer, { width: size, height: size }]}>
         <Image
           accessibilityLabel={`${profile.nickname} imported QR`}
           resizeMode="contain"
           source={{ uri: profile.imagePath }}
-          style={styles.importedQr}
+          style={{ width: size, height: size, borderRadius: 4 }}
         />
       </View>
     );
@@ -46,43 +50,41 @@ export function QRPreview({ profile, runtimeAmount, initialPayload }: QRPreviewP
   }, [profile, runtimeAmount, initialPayload]);
 
   if (!payload) {
-    return <QRPreviewFallback />;
+    return <QRPreviewFallback size={size} />;
   }
 
   return (
-    <View accessibilityLabel={`${profile.nickname} QR code`} style={styles.qrFrame}>
-      <QRCode backgroundColor="#FFFFFF" color="#020617" size={204} value={payload} />
+    <View accessibilityLabel={`${profile.nickname} QR code`} style={[styles.qrContainer, { width: size, height: size }]}>
+      <QRCode backgroundColor="#FFFFFF" color="#0F172A" size={size} value={payload} />
     </View>
   );
 }
 
-export function QRPreviewFallback(): React.JSX.Element {
+export function QRPreviewFallback({ size = 204 }: { size?: number }): React.JSX.Element {
   return (
-    <View style={styles.qrFrame}>
+    <View style={[styles.qrContainer, styles.fallbackContainer, { width: size, height: size }]}>
       <Text style={styles.fallbackText}>QR unavailable</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  qrFrame: {
-    width: 220,
-    height: 220,
-    borderRadius: 8,
+  qrContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
     backgroundColor: '#FFFFFF',
-    padding: 8,
+    borderRadius: 4,
+    overflow: 'hidden',
   },
-  importedQr: {
-    width: 204,
-    height: 204,
+  fallbackContainer: {
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
   },
   fallbackText: {
     color: '#64748B',
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '600',
+    textAlign: 'center',
   },
 });

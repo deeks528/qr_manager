@@ -1,0 +1,94 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:padding="12dp">
+
+    <!-- Subtle bottom-right wave watermark -->
+    <ImageView
+        android:layout_width="65dp"
+        android:layout_height="65dp"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:contentDescription="@null"
+        android:scaleType="fitEnd"
+        android:src="@drawable/ic_widget_wave_bg" />
+
+    <!-- Top Header: Sample Avatar + Name + Chevron [H] Hcl › -->
+    <RelativeLayout
+        android:id="@+id/widget_preview_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentTop="true">
+
+        <ImageView
+            android:id="@+id/widget_preview_avatar"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:contentDescription="Profile Avatar"
+            android:src="@drawable/preview_avatar_h" />
+
+        <FrameLayout
+            android:id="@+id/widget_preview_arrow"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:background="@drawable/widget_arrow_bg">
+
+            <ImageView
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:layout_gravity="center"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_chevron_right_small" />
+        </FrameLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_marginStart="8dp"
+            android:layout_marginEnd="6dp"
+            android:layout_toStartOf="@id/widget_preview_arrow"
+            android:layout_toEndOf="@id/widget_preview_avatar"
+            android:ellipsize="end"
+            android:fontFamily="sans-serif-medium"
+            android:singleLine="true"
+            android:text="QR Name"
+            android:textColor="#0F172A"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+    </RelativeLayout>
+
+    <!-- Subtitle / Identifier at bottom -->
+    <TextView
+        android:id="@+id/widget_preview_subtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:ellipsize="end"
+        android:fontFamily="sans-serif"
+        android:gravity="center"
+        android:singleLine="true"
+        android:text="QR Content/Subtitle"
+        android:textColor="#64748B"
+        android:textSize="11sp" />
+
+    <!-- Center Sample QR Code -->
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_above="@id/widget_preview_subtitle"
+        android:layout_below="@id/widget_preview_header"
+        android:layout_centerInParent="true"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="6dp"
+        android:contentDescription="Profile QR Code"
+        android:scaleType="fitCenter"
+        android:src="@drawable/ic_preview_sample_qr" />
+
+</RelativeLayout>

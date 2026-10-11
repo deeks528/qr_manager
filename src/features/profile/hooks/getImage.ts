@@ -2,7 +2,7 @@ import ImagePicker from "react-native-image-crop-picker";
 import RNFS from "react-native-fs";
 import { Platform } from "react-native";
 
-export const getImage = async () => {
+export const getImage = async (imageType: String = "imported_image") => {
   try {
     const image = await ImagePicker.openPicker({
       width: 400,
@@ -22,7 +22,7 @@ export const getImage = async () => {
     // Create a permanent path in the app's private storage
     const dirPath = `${RNFS.DocumentDirectoryPath}/qr_images`;
     // Extract filename from path or generate one
-    const fileName = `qr_cropped_${Date.now()}.jpg`;
+    const fileName = `${imageType}_${Date.now()}.jpg`;
     const destPath = `${dirPath}/${fileName}`;
 
     // Ensure directory exists

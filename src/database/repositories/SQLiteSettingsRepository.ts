@@ -8,6 +8,7 @@ import {
   Settings,
 } from '@domain/models/Settings';
 import { ValidationError } from '@domain/errors/DomainErrors';
+import { WidgetBridgeService } from '@shared/native/WidgetBridge';
 
 export class SQLiteSettingsRepository implements SettingsRepository {
   constructor(
@@ -101,6 +102,7 @@ export class SQLiteSettingsRepository implements SettingsRepository {
       this.startupCache.setString(STARTUP_CACHE_KEYS.defaultProfileId, settings.defaultProfileId);
     } else {
       this.startupCache.delete(STARTUP_CACHE_KEYS.defaultProfileId);
+      WidgetBridgeService.updateDefaultProfileWidget(null);
     }
 
     this.startupCache.setNumber(STARTUP_CACHE_KEYS.maxHeaderProfiles, settings.maxHeaderProfiles);

@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_default_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:padding="12dp">
+
+    <!-- Bottom-right decorative background -->
+    <ImageView
+        android:layout_width="90dp"
+        android:layout_height="90dp"
+        android:layout_alignParentEnd="true"
+        android:layout_alignParentBottom="true"
+        android:contentDescription="@null"
+        android:scaleType="fitEnd"
+        android:src="@drawable/ic_widget_wave_bg" />
+
+    <!-- Large QR: approximately 2x2 widget area -->
+    <ImageView
+        android:id="@+id/widget_default_qr"
+        android:layout_width="120dp"
+        android:layout_height="120dp"
+        android:layout_alignParentEnd="true"
+        android:layout_centerVertical="true"
+        android:contentDescription="Profile QR Code"
+        android:scaleType="fitCenter" />
+
+    <!-- Profile information -->
+    <LinearLayout
+        android:id="@+id/widget_default_left_group"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentStart="true"
+        android:layout_centerVertical="true"
+        android:layout_marginEnd="12dp"
+        android:layout_toStartOf="@id/widget_default_qr"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <!-- Avatar -->
+        <ImageView
+            android:id="@+id/widget_default_avatar"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
+            android:contentDescription="Profile Avatar"
+            android:scaleType="fitCenter" />
+
+        <!-- Name and identifier -->
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/widget_default_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text="My UPI Account"
+                android:textColor="#0F172A"
+                android:textSize="17sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_default_subtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="3dp"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif"
+                android:maxLines="1"
+                android:text="35546649469156"
+                android:textColor="#64748B"
+                android:textSize="13sp" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</RelativeLayout>

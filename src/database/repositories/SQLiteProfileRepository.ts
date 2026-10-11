@@ -14,6 +14,7 @@ import {
 } from '@domain/models/Profile';
 import { AvatarService } from '@domain/services/AvatarService';
 import { ValidationService } from '@domain/services/ValidationService';
+import { WidgetBridgeService } from '@shared/native/WidgetBridge';
 import { ProfileSubtypeHandler } from './ProfileSubtypeHandler';
 
 const PROFILE_SELECT = `
@@ -113,6 +114,10 @@ export class SQLiteProfileRepository implements ProfileRepository {
       await ProfileSubtypeHandler.update(client, updated);
     });
 
+    if (settings.defaultProfileId === updated.id) {
+      WidgetBridgeService.updateDefaultProfileWidget(updated);
+    }
+
     return updated;
   }
 
@@ -132,7 +137,11 @@ export class SQLiteProfileRepository implements ProfileRepository {
     });
 
     if (settings.defaultProfileId === profileId) {
-      await this.settingsRepository.getSettings();
+      const refreshedSettings = await this.settingsRepository.getSettings();
+      const newDefault = refreshedSettings.defaultProfileId
+        ? await this.getProfile(refreshedSettings.defaultProfileId)
+        : null;
+      WidgetBridgeService.updateDefaultProfileWidget(newDefault);
     }
   }
 
@@ -152,9 +161,10 @@ export class SQLiteProfileRepository implements ProfileRepository {
   }
 
   async setDefaultProfile(profileId: string | null): Promise<void> {
-    if (profileId !== null) await this.getRequiredProfile(profileId);
+    const profile = profileId !== null ? await this.getRequiredProfile(profileId) : null;
     const settings = await this.settingsRepository.getSettings();
     await this.settingsRepository.updateSettings({ ...settings, defaultProfileId: profileId });
+    WidgetBridgeService.updateDefaultProfileWidget(profile);
   }
 
   async assignQuickAccessSlot(profileId: string, slot: 0 | 1 | 2 | 3): Promise<void> {

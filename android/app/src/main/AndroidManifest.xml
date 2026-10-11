@@ -1,7 +1,16 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-          package="com.tempqrmanager">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="upi" />
+        </intent>
+    </queries>
 
     <application
       android:name=".MainApplication"
@@ -22,6 +31,65 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent-filter>
+        <intent-filter>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="qrprofile" />
+        </intent-filter>
       </activity>
+
+      <!-- Default Profile Widget (2x2) -->
+      <receiver
+          android:name=".widgets.DefaultProfileWidgetProvider"
+          android:label="Default Profile (2x2)"
+          android:exported="true">
+          <intent-filter>
+              <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          </intent-filter>
+          <meta-data
+              android:name="android.appwidget.provider"
+              android:resource="@xml/default_profile_widget_info" />
+      </receiver>
+
+      <!-- Default Profile Widget (4x2 Wide) -->
+      <receiver
+          android:name=".widgets.DefaultProfileWideWidgetProvider"
+          android:label="Default Profile (4x2 Wide)"
+          android:exported="true">
+          <intent-filter>
+              <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          </intent-filter>
+          <meta-data
+              android:name="android.appwidget.provider"
+              android:resource="@xml/default_profile_wide_widget_info" />
+      </receiver>
+
+
+      <!-- Scan QR Widget (2x1 Compact) -->
+      <receiver
+          android:name=".widgets.ScanQrCompactWidgetProvider"
+          android:label="Scan QR (2x1 Compact)"
+          android:exported="true">
+          <intent-filter>
+              <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          </intent-filter>
+          <meta-data
+              android:name="android.appwidget.provider"
+              android:resource="@xml/scan_qr_compact_widget_info" />
+      </receiver>
+
+      <!-- Scan QR Widget (1x1 Icon only) -->
+      <receiver
+          android:name=".widgets.ScanQrSmallWidgetProvider"
+          android:label="Scan QR (1x1 Icon)"
+          android:exported="true">
+          <intent-filter>
+              <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+          </intent-filter>
+          <meta-data
+              android:name="android.appwidget.provider"
+              android:resource="@xml/scan_qr_small_widget_info" />
+      </receiver>
     </application>
 </manifest>

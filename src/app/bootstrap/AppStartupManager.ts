@@ -2,6 +2,7 @@ import { AppDependencies } from './createAppDependencies';
 import { Profile } from '@domain/models/Profile';
 import { QRPayloadService } from '@domain/services/QRPayloadService';
 import { STARTUP_CACHE_KEYS, StartupCache } from '@database/mmkv/StartupCache';
+import { WidgetBridgeService } from '@shared/native/WidgetBridge';
 
 export interface AppStartupResult {
   cachedDefaultProfileId: string | null;
@@ -55,6 +56,9 @@ export class AppStartupManager {
           result.initialDefaultPayload = null;
         }
       }
+
+      // Sync Android Home-Screen Widget with default profile
+      WidgetBridgeService.updateDefaultProfileWidget(result.initialDefaultProfile);
     } catch (error: unknown) {
       result.error = error instanceof Error ? error : new Error('Startup failed.');
     }

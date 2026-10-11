@@ -1,4 +1,4 @@
-# Universal QR Profile Manager
+# QR Profile Manager
 
 Offline-first React Native application for managing reusable QR profiles.
 

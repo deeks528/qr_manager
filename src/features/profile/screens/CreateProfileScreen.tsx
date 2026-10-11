@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 
 import { CreateProfileData } from '@database/repositories/ProfileRepository';
-import { ProfileType } from '@domain/models/Profile';
+import { Profile, ProfileType } from '@domain/models/Profile';
 import { useCreateProfile } from '@features/profile/hooks/useCreateProfile';
 import { getImage } from '@features/profile/hooks/getImage';
 
@@ -33,7 +33,7 @@ export function CreateProfileScreen({ onCancel, onSaved }: CreateProfileScreenPr
   const [upiId, setUpiId] = useState('');
   const [minimumAmount, setMinimumAmount] = useState('');
   const [defaultDescription, setDefaultDescription] = useState('');
-  const [mobileNumber, setMobileNumber] = useState('');
+  const [mobileNumber, setMobileNumber] = useState('+91');
   const [imagePath, setImagePath] = useState('');
   const [text, setText] = useState('');
   const [formError, setFormError] = useState<string | null>(null);

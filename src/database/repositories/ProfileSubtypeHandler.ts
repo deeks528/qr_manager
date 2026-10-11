@@ -5,7 +5,19 @@ import {
 } from '@domain/models/Profile';
 import { ValidationService } from '@domain/services/ValidationService';
 import { ValidationError } from '@domain/errors/DomainErrors';
-import RNFS from 'react-native-fs';
+
+function getRNFS(): { exists: (path: string) => Promise<boolean>; unlink: (path: string) => Promise<void> } | null {
+  if (typeof process !== 'undefined' && process.versions?.node && !(global as any).__fbBatchedBridge) {
+    return null;
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const mod = require('react-native-fs');
+    return mod.default || mod;
+  } catch {
+    return null;
+  }
+}
 
 export class ProfileSubtypeHandler {
   static async insert(client: SqlClient, profile: Profile): Promise<void> {
@@ -90,11 +102,14 @@ export class ProfileSubtypeHandler {
     // If it's an "Other" profile, delete the associated image file
     if (profile.type === ProfileType.Other && profile.imagePath) {
       try {
-        const filePath = profile.imagePath.replace('file://', '');
-        const exists = await RNFS.exists(filePath);
-        if (exists) {
-          await RNFS.unlink(filePath);
-          console.log('Deleted physical image file:', filePath);
+        const rnfs = getRNFS();
+        if (rnfs) {
+          const filePath = profile.imagePath.replace('file://', '');
+          const exists = await rnfs.exists(filePath);
+          if (exists) {
+            await rnfs.unlink(filePath);
+            console.log('Deleted physical image file:', filePath);
+          }
         }
       } catch (error) {
         console.error('Error deleting image file:', error);

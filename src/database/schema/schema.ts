@@ -46,6 +46,13 @@ CREATE TABLE IF NOT EXISTS other_profiles (
   FOREIGN KEY (profileId) REFERENCES profiles(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS quick_messages (
+  id TEXT PRIMARY KEY,
+  text TEXT NOT NULL,
+  sortOrder INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_quick_messages_sort_order ON quick_messages(sortOrder);
 CREATE INDEX IF NOT EXISTS idx_profiles_display_order ON profiles(displayOrder);
 CREATE INDEX IF NOT EXISTS idx_profiles_quick_access_slot ON profiles(quickAccessSlot);
 CREATE INDEX IF NOT EXISTS idx_upi_profiles_upi_id ON upi_profiles(upiId);

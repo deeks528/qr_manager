@@ -1,6 +1,6 @@
 /**
  * React Native App Entry Point
- * Universal QR Profile Manager
+ * QR Profile Manager
  */
 
 import { AppRegistry } from 'react-native';
