@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 16px 0 32px; display: flex; flex-direction: column; align-items: center; gap: 14px; background: transparent; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+    .phone {
+      width: 310px;
+      border-radius: 38px;
+      box-shadow: 0 0 0 8px #1e293b, 0 0 0 10px #334155, 0 20px 50px rgba(0,0,0,0.22);
+      overflow: hidden;
+      background: #F8FAFC;
+      position: relative;
+    }
+    .notch { background: #1e293b; height: 26px; display: flex; align-items: center; justify-content: center; }
+    .notch-pill { width: 64px; height: 14px; background: #0f172a; border-radius: 0 0 10px 10px; }
+
+    .screen { display: none; }
+    .screen.active { display: block; }
+
+    /* Nav tabs */
+    .nav-tabs { display: flex; gap: 4px; background: #F1F5F9; padding: 4px; border-radius: 999px; flex-wrap: wrap; justify-content: center; }
+    .nav-tab { padding: 5px 11px; border-radius: 999px; font-size: 11px; font-weight: 600; cursor: pointer; color: #64748B; border: none; background: transparent; transition: all 0.15s; white-space: nowrap; }
+    .nav-tab.active { background: #0F172A; color: white; }
+
+    /* Common UI elements */
+    .avatar { width: 40px; height: 40px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 12px; color: white; cursor: pointer; flex-shrink: 0; transition: box-shadow 0.15s; }
+    .avatar.sel { box-shadow: 0 0 0 2.5px #0F172A; }
+
+    .type-card { padding: 10px 14px; border-radius: 8px; border: 1px solid #CBD5E1; background: white; color: #334155; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: all 0.15s; }
+    .type-card.sel { border-color: #2563EB; background: #DBEAFE; color: #1D4ED8; }
+
+    .field-label { font-size: 13px; font-weight: 700; color: #334155; margin-bottom: 5px; display: block; }
+    .field-input { width: 100%; height: 44px; border-radius: 8px; border: 1px solid #CBD5E1; background: white; color: #0F172A; font-size: 14px; padding: 0 12px; outline: none; transition: border-color 0.15s; }
+    .field-input:focus { border-color: #2563EB; }
+    .field-textarea { width: 100%; height: 90px; border-radius: 8px; border: 1px solid #CBD5E1; background: white; color: #0F172A; font-size: 13px; padding: 10px 12px; outline: none; resize: none; }
+
+    .btn-primary { background: #2563EB; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: 700; padding: 0 16px; height: 44px; cursor: pointer; transition: opacity 0.15s; }
+    .btn-primary:disabled { background: #94A3B8; cursor: default; }
+    .btn-secondary { background: white; color: #334155; border: 1px solid #CBD5E1; border-radius: 8px; font-size: 14px; font-weight: 700; padding: 0 16px; height: 44px; cursor: pointer; }
+    .btn-dark { background: #0F172A; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 600; padding: 9px; cursor: pointer; flex: 1; }
+    .btn-outline { background: white; border: 1px solid #CBD5E1; color: #0F172A; border-radius: 8px; font-size: 13px; font-weight: 600; padding: 9px; cursor: pointer; flex: 1; }
+
+    .chip { padding: 5px 10px; border-radius: 7px; border: 1px solid #CBD5E1; font-size: 12px; cursor: pointer; background: white; color: #475569; transition: all 0.15s; }
+    .chip.sel { border-color: #2563EB; background: #EFF6FF; color: #2563EB; font-weight: 600; }
+    .slot-btn { width: 36px; height: 36px; border-radius: 8px; border: 1px solid #CBD5E1; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 13px; background: white; color: #475569; transition: all 0.15s; }
+    .slot-btn.sel { border-color: #2563EB; background: #EFF6FF; color: #2563EB; font-weight: 700; }
+
+    .card { background: white; border-radius: 14px; border: 1px solid #E2E8F0; padding: 14px; margin-bottom: 10px; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+    .card-title { font-size: 13px; font-weight: 700; color: #0F172A; margin-bottom: 12px; }
+
+    .import-overlay { display: none; position: absolute; inset: 0; background: rgba(15,23,42,0.6); z-index: 30; align-items: center; justify-content: center; padding: 18px; border-radius: 30px; }
+    .import-overlay.open { display: flex; }
+
+    /* Splash pulse */
+    @keyframes pulse { 0%,100% { transform: scale(0.88); } 50% { transform: scale(1.08); } }
+    .pulse { animation: pulse 1.6s ease-in-out infinite; }
+
+    /* Scrollable inner */
+    .inner-scroll { max-height: 545px; overflow-y: auto; }
+    .inner-scroll::-webkit-scrollbar { width: 3px; }
+    .inner-scroll::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+  <!-- Screen nav tabs -->
+  <div class="nav-tabs">
+    <button class="nav-tab active"  onclick="go('splash',  this)">💫 Splash</button>
+    <button class="nav-tab"         onclick="go('home',    this)">🏠 Home</button>
+    <button class="nav-tab"         onclick="go('create',  this)">➕ Create</button>
+    <button class="nav-tab"         onclick="go('edit',    this)">✏️ Edit</button>
+    <button class="nav-tab"         onclick="go('settings',this)">⚙️ Settings</button>
+  </div>
+
+  <!-- ══════════════════ PHONE ══════════════════ -->
+  <div class="phone">
+    <div class="notch"><div class="notch-pill"></div></div>
+
+    <!-- ── SPLASH ── -->
+    <div id="s-splash" class="screen active inner-scroll" style="background:#F8FAFC; min-height:540px; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:32px 20px;">
+      <div class="pulse" style="width:80px;height:80px;border-radius:40px;background:#EFF6FF;border:2px solid #BFDBFE;display:flex;align-items:center;justify-content:center;margin-bottom:24px;">
+        <span style="font-size:38px;">📱</span>
+      </div>
+      <div style="font-size:20px;font-weight:700;color:#0F172A;text-align:center;line-height:1.3;">Universal QR<br>Profile Manager</div>
+      <div style="margin-top:24px;display:flex;gap:6px;">
+        <div style="width:8px;height:8px;border-radius:4px;background:#2563EB;animation:pulse 1s ease-in-out infinite;"></div>
+        <div style="width:8px;height:8px;border-radius:4px;background:#93C5FD;animation:pulse 1s ease-in-out 0.2s infinite;"></div>
+        <div style="width:8px;height:8px;border-radius:4px;background:#BFDBFE;animation:pulse 1s ease-in-out 0.4s infinite;"></div>
+      </div>
+      <div style="margin-top:16px;font-size:13px;color:#64748B;">Loading profiles...</div>
+    </div>
+
+    <!-- ── HOME ── -->
+    <div id="s-home" class="screen inner-scroll" style="background:#F8FAFC;">
+      <!-- Header -->
+      <div style="background:white;border-bottom:1px solid #E2E8F0;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;">
+        <div id="av-row" style="display:flex;gap:6px;align-items:center;">
+          <div class="avatar sel" style="background:#2563EB;" onclick="selProfile(0)">MU</div>
+          <div class="avatar"     style="background:#059669;" onclick="selProfile(1)">WA</div>
+          <div class="avatar"     style="background:#7C3AED;" onclick="selProfile(2)">BS</div>
+          <div onclick="go('create',document.querySelectorAll('.nav-tab')[2])" style="width:36px;height:36px;border-radius:999px;border:1px solid #CBD5E1;background:white;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;color:#64748B;font-weight:300;">+</div>
+        </div>
+        <div onclick="go('settings',document.querySelectorAll('.nav-tab')[4])" style="width:34px;height:34px;border-radius:999px;border:1px solid #E2E8F0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;">⚙️</div>
+      </div>
+
+      <!-- QR card -->
+      <div style="padding:12px 12px 6px;">
+        <div class="card" style="text-align:center;padding:16px;">
+          <canvas id="qr" width="130" height="130" style="display:block;margin:0 auto;border-radius:4px;"></canvas>
+          <div id="pname" style="margin-top:10px;font-size:15px;font-weight:700;color:#0F172A;">My UPI Account</div>
+          <div id="pmeta" style="font-size:12px;color:#64748B;margin-top:2px;">myname@upi</div>
+          <div id="amt-row" style="display:flex;align-items:center;gap:8px;margin-top:10px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:6px 10px;">
+            <span style="font-size:12px;color:#64748B;font-weight:500;">Amount ₹</span>
+            <input type="number" placeholder="0" style="border:none;background:transparent;font-size:13px;color:#0F172A;outline:none;width:60px;">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button onclick="go('edit',document.querySelectorAll('.nav-tab')[3])" class="btn-secondary" style="flex:1;font-size:12px;height:36px;">Edit</button>
+            <button id="def-btn" onclick="setDef()" style="flex:1;font-size:12px;height:36px;border-radius:8px;border:1px solid #CBD5E1;background:white;color:#0F172A;font-weight:600;cursor:pointer;">Set as Default</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- List -->
+      <div style="padding:2px 12px 16px;">
+        <div style="font-size:10px;font-weight:600;color:#94A3B8;letter-spacing:.07em;text-transform:uppercase;margin-bottom:7px;">Profiles</div>
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div onclick="selProfile(0)" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;">
+            <div style="width:30px;height:30px;border-radius:999px;background:#2563EB;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;flex-shrink:0;">MU</div>
+            <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#0F172A;">My UPI Account</div><div style="font-size:11px;color:#94A3B8;">UPI · myname@upi</div></div>
+            <span style="color:#CBD5E1;font-size:14px;">›</span>
+          </div>
+          <div onclick="selProfile(1)" style="display:flex;align-items:center;gap:9px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;">
+            <div style="width:30px;height:30px;border-radius:999px;background:#059669;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;flex-shrink:0;">WA</div>
+            <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#0F172A;">WhatsApp</div><div style="font-size:11px;color:#94A3B8;">WhatsApp · +91 98765 43210</div></div>
+            <span style="color:#CBD5E1;font-size:14px;">›</span>
+          </div>
+          <div onclick="selProfile(2)" style="display:flex;align-items:center;gap:9px;padding:10px 12px;cursor:pointer;">
+            <div style="width:30px;height:30px;border-radius:999px;background:#7C3AED;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:white;flex-shrink:0;">BS</div>
+            <div style="flex:1;"><div style="font-size:13px;font-weight:600;color:#0F172A;">Business UPI</div><div style="font-size:11px;color:#94A3B8;">UPI · business@upi</div></div>
+            <span style="color:#CBD5E1;font-size:14px;">›</span>
+          </div>
+        </div>
+      </div>
+    </div><!-- /home -->
+
+    <!-- ── CREATE PROFILE ── -->
+    <div id="s-create" class="screen inner-scroll" style="background:#F8FAFC;">
+      <div style="padding:12px 14px 0;">
+        <!-- topbar -->
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <button onclick="go('home',document.querySelectorAll('.nav-tab')[1])" class="btn-secondary" style="font-size:13px;height:40px;min-width:72px;">Cancel</button>
+          <button id="save-btn" class="btn-primary" style="font-size:13px;height:40px;min-width:72px;" disabled>Save</button>
+        </div>
+        <div style="font-size:22px;font-weight:700;color:#0F172A;margin-bottom:16px;">Create Profile</div>
+
+        <!-- Type selector -->
+        <div style="display:flex;gap:7px;margin-bottom:18px;overflow-x:auto;padding-bottom:2px;">
+          <div class="type-card sel" onclick="selType('upi',this)">UPI</div>
+          <div class="type-card"     onclick="selType('wa',this)">WhatsApp</div>
+          <div class="type-card"     onclick="selType('custom',this)">Custom</div>
+          <div class="type-card"     onclick="selType('import',this)">Import QR</div>
+        </div>
+
+        <!-- Nickname (always shown) -->
+        <div style="margin-bottom:14px;">
+          <label class="field-label">Nickname</label>
+          <input id="nick" class="field-input" placeholder="Home Account" oninput="checkSave()">
+        </div>
+
+        <!-- UPI fields -->
+        <div id="upi-fields">
+          <div style="margin-bottom:14px;"><label class="field-label">UPI ID</label><input class="field-input" placeholder="name@bank"></div>
+          <div style="margin-bottom:14px;"><label class="field-label">Minimum Amount</label><input class="field-input" type="number" placeholder="0"></div>
+          <div style="margin-bottom:14px;"><label class="field-label">Default Description</label><input class="field-input" placeholder="Payment"></div>
+        </div>
+
+        <!-- WhatsApp fields -->
+        <div id="wa-fields" style="display:none;">
+          <div style="margin-bottom:14px;"><label class="field-label">Mobile Number</label><input class="field-input" type="tel" placeholder="9876543210"></div>
+        </div>
+
+        <!-- Custom fields -->
+        <div id="custom-fields" style="display:none;">
+          <div style="margin-bottom:14px;">
+            <label class="field-label">Text</label>
+            <textarea id="custom-text" class="field-textarea" placeholder="Write something to wrap in QR..." maxlength="120" oninput="updateCounter()"></textarea>
+            <div style="text-align:right;font-size:11px;color:#64748B;margin-top:3px;"><span id="counter">0</span>/120</div>
+          </div>
+        </div>
+
+        <!-- Import QR fields -->
+        <div id="import-fields" style="display:none;">
+          <label class="field-label">Imported QR Image</label>
+          <div style="height:100px;border-radius:8px;border:2px dashed #CBD5E1;background:#F1F5F9;display:flex;align-items:center;justify-content:center;cursor:pointer;margin-top:6px;" onclick="fakePickImg()">
+            <div id="img-placeholder" style="color:#64748B;font-size:13px;font-weight:600;">📁 Pick QR Image from Gallery</div>
+            <div id="img-picked" style="display:none;color:#059669;font-size:13px;font-weight:600;">✓ qr_image.png selected</div>
+          </div>
+        </div>
+      </div>
+      <div style="height:32px;"></div>
+    </div><!-- /create -->
+
+    <!-- ── EDIT PROFILE ── -->
+    <div id="s-edit" class="screen inner-scroll" style="background:#F8FAFC;">
+      <div style="padding:12px 14px 0;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+          <button onclick="go('home',document.querySelectorAll('.nav-tab')[1])" class="btn-secondary" style="font-size:13px;height:40px;min-width:72px;">Cancel</button>
+          <button class="btn-primary" style="font-size:13px;height:40px;min-width:72px;">Save</button>
+        </div>
+        <div style="font-size:22px;font-weight:700;color:#0F172A;margin-bottom:16px;">Edit Profile</div>
+
+        <!-- Avatar preview -->
+        <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;background:white;border-radius:12px;border:1px solid #E2E8F0;padding:14px;">
+          <div style="width:52px;height:52px;border-radius:999px;background:#2563EB;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:white;">MU</div>
+          <div>
+            <div style="font-size:14px;font-weight:700;color:#0F172A;">My UPI Account</div>
+            <div style="font-size:12px;color:#64748B;margin-top:2px;">UPI Profile</div>
+          </div>
+        </div>
+
+        <div style="margin-bottom:14px;"><label class="field-label">Nickname</label><input class="field-input" value="My UPI Account"></div>
+        <div style="margin-bottom:14px;"><label class="field-label">UPI ID</label><input class="field-input" value="myname@upi"></div>
+        <div style="margin-bottom:14px;"><label class="field-label">Minimum Amount</label><input class="field-input" type="number" value="50"></div>
+        <div style="margin-bottom:14px;"><label class="field-label">Default Description</label><input class="field-input" value="Payment"></div>
+
+        <!-- Danger zone -->
+        <div style="margin-top:8px;padding:14px;border-radius:12px;border:1px solid #FEE2E2;background:#FFF5F5;">
+          <div style="font-size:12px;font-weight:700;color:#DC2626;margin-bottom:10px;text-transform:uppercase;letter-spacing:.05em;">Danger Zone</div>
+          <button onclick="fakeDelete()" style="width:100%;padding:10px;border-radius:8px;border:1px solid #FCA5A5;background:white;color:#DC2626;font-size:13px;font-weight:600;cursor:pointer;">🗑 Delete This Profile</button>
+        </div>
+      </div>
+      <div id="del-confirm" style="display:none;position:absolute;inset:0;background:rgba(15,23,42,0.6);z-index:30;align-items:center;justify-content:center;padding:20px;border-radius:30px;">
+        <div style="background:white;border-radius:16px;padding:20px;width:100%;">
+          <div style="font-size:15px;font-weight:700;color:#0F172A;margin-bottom:6px;">Delete Profile?</div>
+          <div style="font-size:12px;color:#64748B;margin-bottom:16px;">This will permanently delete "My UPI Account" and its QR data.</div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="document.getElementById('del-confirm').style.display='none'" class="btn-secondary" style="flex:1;font-size:13px;height:40px;">Cancel</button>
+            <button onclick="go('home',document.querySelectorAll('.nav-tab')[1]);document.getElementById('del-confirm').style.display='none'" style="flex:1;height:40px;border-radius:8px;border:none;background:#DC2626;color:white;font-size:13px;font-weight:700;cursor:pointer;">Delete</button>
+          </div>
+        </div>
+      </div>
+      <div style="height:32px;"></div>
+    </div><!-- /edit -->
+
+    <!-- ── SETTINGS ── -->
+    <div id="s-settings" class="screen inner-scroll" style="background:#F8FAFC;position:relative;">
+
+      <!-- Import overlay -->
+      <div class="import-overlay" id="imp-modal">
+        <div style="background:white;border-radius:16px;padding:18px;width:100%;">
+          <div style="font-size:14px;font-weight:700;color:#0F172A;margin-bottom:4px;">Import Backup</div>
+          <div style="font-size:12px;color:#64748B;margin-bottom:10px;">Paste your exported JSON backup:</div>
+          <textarea rows="4" class="field-textarea" style="height:80px;" placeholder='{"version":1,"exportedAt":...}'></textarea>
+          <div id="verify-ok" style="display:none;margin-top:8px;padding:8px 10px;border-radius:6px;background:#F0FDF4;border:1px solid #BBF7D0;font-size:11px;color:#15803D;font-weight:500;">✓ Valid backup — 3 profiles detected</div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button onclick="doVerify()" class="btn-primary" style="flex:1;height:38px;font-size:12px;">Verify</button>
+            <button onclick="closeImp()" class="btn-secondary" style="flex:1;height:38px;font-size:12px;">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Header -->
+      <div style="background:white;border-bottom:1px solid #E2E8F0;padding:9px 14px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:10;">
+        <div onclick="go('home',document.querySelectorAll('.nav-tab')[1])" style="width:32px;height:32px;border-radius:999px;background:#F1F5F9;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;font-weight:700;color:#0F172A;">←</div>
+        <div style="font-size:15px;font-weight:700;color:#0F172A;">Settings</div>
+        <div style="width:32px;"></div>
+      </div>
+
+      <div style="padding:12px;">
+        <!-- Profile Prefs -->
+        <div class="card">
+          <div class="card-title">Profile Preferences</div>
+          <div style="font-size:12px;font-weight:600;color:#334155;">Default Startup Profile</div>
+          <div style="font-size:11px;color:#64748B;margin:3px 0 10px;">The profile that opens automatically on launch</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+            <div class="chip"     onclick="selChip(this)">None (Off)</div>
+            <div class="chip sel" onclick="selChip(this)">My UPI</div>
+            <div class="chip"     onclick="selChip(this)">WhatsApp</div>
+            <div class="chip"     onclick="selChip(this)">Business</div>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:#334155;">Max Header Slots</div>
+          <div style="font-size:11px;color:#64748B;margin:3px 0 10px;">Quick access profiles in header (1–4)</div>
+          <div style="display:flex;gap:8px;">
+            <div class="slot-btn"     onclick="selSlot(this)">1</div>
+            <div class="slot-btn sel" onclick="selSlot(this)">2</div>
+            <div class="slot-btn"     onclick="selSlot(this)">3</div>
+            <div class="slot-btn"     onclick="selSlot(this)">4</div>
+          </div>
+        </div>
+
+        <!-- Backup -->
+        <div class="card">
+          <div class="card-title">Backup & Recovery</div>
+          <div style="font-size:11px;color:#64748B;margin-bottom:12px;">Export your profiles to a JSON file, or restore from a backup.</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn-dark" onclick="showExport()">Export Backup</button>
+            <button class="btn-outline" onclick="openImp()">Import Backup</button>
+          </div>
+          <div id="exp-toast" style="display:none;margin-top:10px;padding:8px 10px;border-radius:6px;background:#F0FDF4;border:1px solid #BBF7D0;font-size:11px;color:#15803D;font-weight:500;">✓ Backup exported &amp; shared!</div>
+        </div>
+
+        <!-- About -->
+        <div class="card">
+          <div class="card-title">About</div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9;"><span style="font-size:12px;color:#64748B;">Version</span><span style="font-size:12px;font-weight:600;color:#0F172A;">1.0.0 (MVP)</span></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9;"><span style="font-size:12px;color:#64748B;">Storage Mode</span><span style="font-size:12px;font-weight:600;color:#0F172A;">Offline-Only</span></div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;"><span style="font-size:12px;color:#64748B;">Database</span><span style="font-size:12px;font-weight:600;color:#0F172A;">SQLite + MMKV</span></div>
+        </div>
+      </div>
+    </div><!-- /settings -->
+
+  </div><!-- /phone -->
+
+  <!-- Legend -->
+  <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:340px;">
+    <div style="font-size:11px;color:var(--muted-foreground,#64748B);background:var(--card,#f1f5f9);padding:4px 10px;border-radius:999px;">💫 Animated splash</div>
+    <div style="font-size:11px;color:var(--muted-foreground,#64748B);background:var(--card,#f1f5f9);padding:4px 10px;border-radius:999px;">🏠 Tap avatar chips</div>
+    <div style="font-size:11px;color:var(--muted-foreground,#64748B);background:var(--card,#f1f5f9);padding:4px 10px;border-radius:999px;">➕ Switch profile types</div>
+    <div style="font-size:11px;color:var(--muted-foreground,#64748B);background:var(--card,#f1f5f9);padding:4px 10px;border-radius:999px;">✏️ Delete confirm modal</div>
+    <div style="font-size:11px;color:var(--muted-foreground,#64748B);background:var(--card,#f1f5f9);padding:4px 10px;border-radius:999px;">⚙️ Import/Export flows</div>
+  </div>
+
+<script>
+  // ── QR draw ────────────────────────────────────────────────────────
+  function drawQR(c) {
+    const ctx = c.getContext('2d'), s = c.width, cell = s/21;
+    ctx.fillStyle='white'; ctx.fillRect(0,0,s,s);
+    const M=[
+      [1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,1,0,0,1,0,1,0,0,1,0,0,0,0,0,1],
+      [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,0,1],
+      [1,0,1,1,1,0,1,0,0,1,0,0,0,0,1,0,1,1,1,0,1],
+      [1,0,1,1,1,0,1,0,1,0,0,1,1,0,1,0,1,1,1,0,1],
+      [1,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1],
+      [0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0],
+      [1,0,1,1,0,0,1,1,1,0,0,0,1,1,1,0,1,0,1,1,0],
+      [0,1,0,0,1,0,0,0,1,0,1,0,0,1,0,1,0,0,1,0,1],
+      [1,0,1,0,0,1,1,1,0,0,0,1,1,0,0,0,1,1,0,0,1],
+      [0,1,0,1,0,0,0,0,0,1,1,0,0,0,1,0,0,1,0,1,0],
+      [1,0,0,0,1,0,1,0,1,0,0,1,0,1,1,1,1,0,0,0,1],
+      [0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0,0,1,0],
+      [1,1,1,1,1,1,1,0,0,1,0,0,1,0,1,0,1,1,0,0,1],
+      [1,0,0,0,0,0,1,0,1,0,0,1,0,1,0,1,0,0,1,0,1],
+      [1,0,1,1,1,0,1,0,0,0,1,0,1,0,1,0,1,0,0,1,0],
+      [1,0,1,1,1,0,1,0,1,1,0,0,0,1,0,0,0,1,0,0,1],
+      [1,0,1,1,1,0,1,0,0,0,1,1,1,0,1,1,1,0,1,0,0],
+      [1,0,0,0,0,0,1,0,1,0,0,1,0,0,0,1,0,0,0,1,0],
+      [1,1,1,1,1,1,1,0,0,1,1,0,1,0,1,0,1,0,1,0,1],
+    ];
+    ctx.fillStyle='#0F172A';
+    M.forEach((row,r)=>row.forEach((b,col)=>{ if(b) ctx.fillRect(col*cell,r*cell,cell-.5,cell-.5); }));
+  }
+  drawQR(document.getElementById('qr'));
+
+  // ── Screen nav ────────────────────────────────────────────────────
+  function go(name, btn) {
+    document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+    document.getElementById('s-'+name).classList.add('active');
+    document.querySelectorAll('.nav-tab').forEach(b=>b.classList.remove('active'));
+    if(btn) btn.classList.add('active');
+  }
+
+  // ── Home: profile selection ───────────────────────────────────────
+  const profiles = [
+    {name:'My UPI Account', meta:'myname@upi', isUpi:true},
+    {name:'WhatsApp', meta:'+91 98765 43210', isUpi:false},
+    {name:'Business UPI', meta:'business@upi', isUpi:true},
+  ];
+  let selIdx=0, defIdx=0;
+  function selProfile(i) {
+    selIdx=i;
+    document.querySelectorAll('#av-row .avatar').forEach((a,j)=>a.classList.toggle('sel',j===i));
+    const p=profiles[i];
+    document.getElementById('pname').textContent=p.name;
+    document.getElementById('pmeta').textContent=p.meta;
+    document.getElementById('amt-row').style.display=p.isUpi?'flex':'none';
+    updDefBtn();
+  }
+  function setDef(){ defIdx=selIdx; updDefBtn(); }
+  function updDefBtn(){
+    const b=document.getElementById('def-btn'), isD=selIdx===defIdx;
+    b.textContent=isD?'✓ Default':'Set as Default';
+    Object.assign(b.style,isD?{borderColor:'#2563EB',color:'#2563EB',background:'#EFF6FF'}:{borderColor:'#CBD5E1',color:'#0F172A',background:'white'});
+  }
+
+  // ── Create: type tabs ────────────────────────────────────────────
+  function selType(t, el) {
+    document.querySelectorAll('.type-card').forEach(c=>c.classList.remove('sel'));
+    el.classList.add('sel');
+    document.getElementById('upi-fields').style.display   = t==='upi'    ? 'block':'none';
+    document.getElementById('wa-fields').style.display    = t==='wa'     ? 'block':'none';
+    document.getElementById('custom-fields').style.display= t==='custom' ? 'block':'none';
+    document.getElementById('import-fields').style.display= t==='import' ? 'block':'none';
+    checkSave();
+  }
+  function checkSave(){
+    document.getElementById('save-btn').disabled = document.getElementById('nick').value.trim().length===0;
+  }
+  function updateCounter(){
+    const ta=document.getElementById('custom-text');
+    document.getElementById('counter').textContent=ta.value.length;
+  }
+  function fakePickImg(){
+    document.getElementById('img-placeholder').style.display='none';
+    document.getElementById('img-picked').style.display='block';
+  }
+
+  // ── Edit: delete confirm ─────────────────────────────────────────
+  function fakeDelete(){
+    const d=document.getElementById('del-confirm');
+    d.style.display='flex';
+  }
+
+  // ── Settings ─────────────────────────────────────────────────────
+  function selChip(el){ document.querySelectorAll('.chip').forEach(c=>c.classList.remove('sel')); el.classList.add('sel'); }
+  function selSlot(el){ document.querySelectorAll('.slot-btn').forEach(b=>b.classList.remove('sel')); el.classList.add('sel'); }
+  function showExport(){ const t=document.getElementById('exp-toast'); t.style.display='block'; setTimeout(()=>t.style.display='none',2400); }
+  function openImp(){ document.getElementById('imp-modal').classList.add('open'); }
+  function closeImp(){ document.getElementById('imp-modal').classList.remove('open'); document.getElementById('verify-ok').style.display='none'; }
+  function doVerify(){ document.getElementById('verify-ok').style.display='block'; }
+</script>
+</body>
+</html>

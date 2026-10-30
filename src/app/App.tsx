@@ -24,6 +24,7 @@ import { PaymentDetailsScreen } from '@features/payment';
 import { Profile } from '@domain/models/Profile';
 import { ParsedUPI } from '@domain/models/ParsedUPI';
 import { UPIParser } from '@domain/services/UPIParser';
+import { AppLogger } from '@domain/services/AppLogger';
 import { AppStartupManager } from '@app/bootstrap/AppStartupManager';
 import { MMKVStartupCache } from '@database/native/MMKVStartupCache';
 
@@ -41,6 +42,8 @@ export function App(): React.JSX.Element {
   >('home');
   const [editingProfile, setEditingProfile] = useState<Profile | null>(null);
   const [scannedUPI, setScannedUPI] = useState<ParsedUPI | null>(null);
+  const [isScannedFromGallery, setIsScannedFromGallery] = useState(false);
+  const [currentScanId, setCurrentScanId] = useState<string | null>(null);
   const splashOpacity = useRef(new Animated.Value(1)).current;
   const homeOpacity = useRef(new Animated.Value(0)).current;
   const [showSplash, setShowSplash] = useState(true);
@@ -52,18 +55,16 @@ export function App(): React.JSX.Element {
     let isMounted = true;
 
     // We can show "Loading profiles..." early if MMKV is available
-    // For now we assume cacheLoaded is true once we enter the startup flow
-    setCacheLoaded(true);
+    // Initialize logger
+    AppLogger.init();
 
     (async () => {
       const startupCache = new MMKVStartupCache();
       const result = await AppStartupManager.performStartup(startupCache, createAppDependencies);
-      console.log('Startup result:', result);
-      console.log('Dependencies:', result.dependencies);
-      console.log('Startup error:', result.error); //#
       if (!isMounted) return;
 
       if (result.error) {
+        AppLogger.error('App', 'Startup error occurred', result.error);
         setStartupError(result.error.message);
         return;
       }
@@ -232,11 +233,14 @@ export function App(): React.JSX.Element {
                 <ScanQRScreen
                   onBack={() => {
                     setScannedUPI(null);
+                    setIsScannedFromGallery(false);
+                    setCurrentScanId(null);
                     setCurrentScreen('home');
                   }}
-                  onScanSuccess={(rawPayload) => {
+                  onScanSuccess={(rawPayload, isFromGallery, scanId) => {
                     const parsed = UPIParser.parse(rawPayload);
-                    console.log('>', parsed);
+                    setIsScannedFromGallery(Boolean(isFromGallery));
+                    setCurrentScanId(scanId ?? null);
                     setScannedUPI(parsed);
                     setCurrentScreen('paymentDetails');
                   }}
@@ -245,9 +249,16 @@ export function App(): React.JSX.Element {
               {currentScreen === 'paymentDetails' && scannedUPI && (
                 <PaymentDetailsScreen
                   parsedUPI={scannedUPI}
-                  onBack={() => setCurrentScreen('scanQR')}
+                  isFromGallery={isScannedFromGallery}
+                  scanId={currentScanId ?? undefined}
+                  onBack={() => {
+                    setCurrentScanId(null);
+                    setCurrentScreen('scanQR');
+                  }}
                   onHome={() => {
                     setScannedUPI(null);
+                    setIsScannedFromGallery(false);
+                    setCurrentScanId(null);
                     setCurrentScreen('home');
                   }}
                   onGoToSettings={() => setCurrentScreen('settings')}

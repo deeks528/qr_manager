@@ -17,11 +17,12 @@ import ImagePicker from 'react-native-image-crop-picker';
 import RNQRGenerator from 'rn-qr-generator';
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
+import { AppLogger } from '@domain/services/AppLogger';
 import { UPIParser } from '@domain/services/UPIParser';
 
 interface ScanQRScreenProps {
   onBack: () => void;
-  onScanSuccess: (rawPayload: string) => void;
+  onScanSuccess: (rawPayload: string, isFromGallery?: boolean, scanId?: string) => void;
 }
 
 export function ScanQRScreen({ onBack, onScanSuccess }: ScanQRScreenProps): React.JSX.Element {
@@ -94,7 +95,7 @@ export function ScanQRScreen({ onBack, onScanSuccess }: ScanQRScreenProps): Reac
     }
   };
 
-  const handleBarcodeScanned = (rawCode: string) => {
+  const handleBarcodeScanned = async (rawCode: string) => {
     if (!rawCode || isProcessingRef.current || !isScanning) {
       return;
     }
@@ -104,9 +105,24 @@ export function ScanQRScreen({ onBack, onScanSuccess }: ScanQRScreenProps): Reac
 
     try {
       // Validate UPI QR
-      UPIParser.parse(rawCode);
-      onScanSuccess(rawCode);
+      const parsed = UPIParser.parse(rawCode);
+      const scanId = await AppLogger.logScan({
+        source: 'camera',
+        scannedIntent: rawCode,
+        parsedUPIId: parsed.upiId,
+        parsedPayeeName: parsed.payeeName,
+        parsedAmount: parsed.amount,
+        status: 'PARSED',
+      });
+      onScanSuccess(rawCode, false, scanId);
     } catch (error: any) {
+      AppLogger.logScan({
+        source: 'camera',
+        scannedIntent: rawCode,
+        status: 'PARSE_FAILED',
+        errorMessage: error?.message || 'Invalid QR code',
+      });
+      AppLogger.error('ScanQRScreen', 'Camera QR code parse failed', error, { rawCode });
       Alert.alert(
         'Invalid QR Code',
         error.message || 'This QR code is not a supported UPI payment QR',
@@ -144,9 +160,24 @@ export function ScanQRScreen({ onBack, onScanSuccess }: ScanQRScreenProps): Reac
       if (response.values && response.values.length > 0) {
         const detectedCode = response.values[0];
         try {
-          UPIParser.parse(detectedCode);
-          onScanSuccess(detectedCode);
+          const parsed = UPIParser.parse(detectedCode);
+          const scanId = await AppLogger.logScan({
+            source: 'gallery',
+            scannedIntent: detectedCode,
+            parsedUPIId: parsed.upiId,
+            parsedPayeeName: parsed.payeeName,
+            parsedAmount: parsed.amount,
+            status: 'PARSED',
+          });
+          onScanSuccess(detectedCode, true, scanId);
         } catch (error: any) {
+          AppLogger.logScan({
+            source: 'gallery',
+            scannedIntent: detectedCode,
+            status: 'PARSE_FAILED',
+            errorMessage: error?.message || 'Invalid QR code',
+          });
+          AppLogger.error('ScanQRScreen', 'Gallery QR code parse failed', error, { detectedCode });
           Alert.alert(
             'Invalid QR Code',
             error.message || 'This QR code is not a supported UPI payment QR',
@@ -162,6 +193,7 @@ export function ScanQRScreen({ onBack, onScanSuccess }: ScanQRScreenProps): Reac
           );
         }
       } else {
+        AppLogger.warn('ScanQRScreen', 'No QR code detected in gallery image', { path: image.path });
         Alert.alert(
           'No QR Code Found',
           'Could not detect any QR code in the selected image.',
@@ -177,8 +209,10 @@ export function ScanQRScreen({ onBack, onScanSuccess }: ScanQRScreenProps): Reac
         );
       }
     } catch (error: any) {
-      if (!error.message?.includes('User cancelled')) {
-        console.warn('Error picking image from gallery:', error);
+      if (error?.message?.includes('User cancelled')) {
+        AppLogger.debug('ScanQRScreen', 'Gallery picker cancelled by user');
+      } else {
+        AppLogger.error('ScanQRScreen', 'Error selecting image from gallery', error);
       }
       isProcessingRef.current = false;
       setIsScanning(true);
@@ -195,22 +229,12 @@ export function ScanQRScreen({ onBack, onScanSuccess }: ScanQRScreenProps): Reac
           onPress={onBack}
           style={styles.backButton}
         >
-          <Ionicons name="chevron-back" size={26} color="#FFFFFF" />
+          <Ionicons name="close" size={24} color="#FFFFFF" />
         </Pressable>
 
-        <Text style={styles.headerTitle}>Scan QR Code</Text>
+        <Text style={styles.headerTitle}>Scan QR</Text>
 
-        <Pressable
-          accessibilityLabel="Toggle torch"
-          onPress={() => setTorchOn(!torchOn)}
-          style={styles.torchHeaderButton}
-        >
-          <Ionicons
-            name={torchOn ? 'flash' : 'flash-outline'}
-            size={22}
-            color={torchOn ? '#FBBF24' : '#FFFFFF'}
-          />
-        </Pressable>
+        <View style={styles.headerSpacer} />
       </View>
 
       {/* ══ Camera & Scanner Frame ══ */}
@@ -273,31 +297,53 @@ export function ScanQRScreen({ onBack, onScanSuccess }: ScanQRScreenProps): Reac
       {/* ══ Bottom Controls ══ */}
       <View style={styles.bottomControls}>
         <Pressable
-          accessibilityLabel="Scan from gallery"
-          onPress={handlePickFromGallery}
-          style={styles.controlButton}
-        >
-          <View style={styles.iconCircle}>
-            <Ionicons name="images-outline" size={24} color="#FFFFFF" />
-          </View>
-          <Text style={styles.controlLabel}>Gallery</Text>
-        </Pressable>
-
-        <Pressable
           accessibilityLabel="Toggle flash"
           onPress={() => setTorchOn(!torchOn)}
           style={styles.controlButton}
         >
           <View style={[styles.iconCircle, torchOn && styles.iconCircleActive]}>
             <Ionicons
-              name={torchOn ? 'flashlight' : 'flashlight-outline'}
-              size={24}
-              color={torchOn ? '#2563EB' : '#FFFFFF'}
+              name={torchOn ? 'flash' : 'flash-outline'}
+              size={22}
+              color={torchOn ? '#10B981' : '#FFFFFF'}
             />
           </View>
-          <Text style={styles.controlLabel}>
-            {torchOn ? 'Torch On' : 'Torch'}
-          </Text>
+          <Text style={styles.controlLabel}>Torch</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityLabel="Scan from gallery"
+          onPress={handlePickFromGallery}
+          style={styles.controlButton}
+        >
+          <View style={styles.iconCircle}>
+            <Ionicons name="image-outline" size={22} color="#FFFFFF" />
+          </View>
+          <Text style={styles.controlLabel}>Gallery</Text>
+        </Pressable>
+
+        <Pressable
+          accessibilityLabel="Paste UPI URI"
+          onPress={() => {
+            if (Platform.OS === 'ios' && Alert.prompt) {
+              Alert.prompt(
+                'Paste UPI URI',
+                'Enter or paste a raw UPI QR URI:',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Scan', onPress: (text?: string) => text && handleBarcodeScanned(text.trim()) },
+                ],
+              );
+            } else {
+              Alert.alert('Paste UPI Intent', 'Please use Gallery to select a QR code screenshot.');
+            }
+          }}
+          style={styles.controlButton}
+        >
+          <View style={styles.iconCircle}>
+            <Ionicons name="clipboard-outline" size={22} color="#FFFFFF" />
+          </View>
+          <Text style={styles.controlLabel}>Paste</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -354,7 +400,7 @@ const styles = StyleSheet.create({
     width: 220,
     height: 220,
     borderWidth: 2,
-    borderColor: 'rgba(37, 114, 255, 0.4)',
+    borderColor: 'rgba(20, 184, 166, 0.3)',
     borderRadius: 20,
     position: 'relative',
     overflow: 'hidden',
@@ -363,7 +409,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 24,
     height: 24,
-    borderColor: '#2572FF',
+    borderColor: '#14B8A6',
   },
   cornerTL: {
     top: 0,
@@ -398,8 +444,8 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 2,
-    backgroundColor: '#3280FF',
-    shadowColor: '#3280FF',
+    backgroundColor: '#14B8A6',
+    shadowColor: '#14B8A6',
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.9,
     shadowRadius: 8,
@@ -414,7 +460,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: 30,
     marginTop: 36,
   },
   controlButton: {
@@ -428,17 +474,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.2)',
+    borderColor: 'rgba(255, 255, 255, 0.18)',
   },
   iconCircleActive: {
-    backgroundColor: '#EFF6FF',
-    borderColor: '#2563EB',
+    backgroundColor: 'rgba(20, 184, 166, 0.25)',
+    borderColor: '#14B8A6',
   },
   controlLabel: {
-    color: '#FFFFFF',
-    fontSize: 13,
+    color: '#CBD5E1',
+    fontSize: 12,
     fontWeight: '500',
     marginTop: 8,
+  },
+  headerSpacer: {
+    width: 40,
   },
   permissionContainer: {
     flex: 1,
@@ -454,7 +503,7 @@ const styles = StyleSheet.create({
   },
   grantButton: {
     marginTop: 18,
-    backgroundColor: '#2563EB',
+    backgroundColor: '#0D6B50',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,

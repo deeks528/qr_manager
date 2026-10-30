@@ -85,7 +85,7 @@ test('AppStartupManager - eager fetch profile and payload when cache hit', async
   assert.ok(result.initialDefaultProfile);
   assert.equal(result.initialDefaultProfile?.nickname, 'My UPI');
   assert.ok(result.initialDefaultPayload);
-  assert.ok(result.initialDefaultPayload?.includes('pa=test%40upi'));
+  assert.ok(result.initialDefaultPayload?.includes('pa=test@upi'));
   assert.ok(result.initialDefaultPayload?.includes('am=10.00'));
   assert.equal(result.error, null);
 });

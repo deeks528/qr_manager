@@ -24,6 +24,7 @@ import { QRPreview } from '@features/home/components/QRPreview';
 import { UPIPaymentService } from '@domain/services/UPIPaymentService';
 import { UPIParser } from '@domain/services/UPIParser';
 import { QRPayloadService } from '@domain/index';
+import { AppLogger } from '@domain/services/AppLogger';
 
 interface HomeScreenProps {
   onCreateProfile: () => void;
@@ -145,8 +146,14 @@ export function HomeScreen({
 
     try {
       console.log('Final generated UPI URI:', parsedUPI);
+      AppLogger.info('HomeScreen', 'Initiating quick payment from profile', {
+        nickname: selectedProfile.nickname,
+        upiId: selectedProfile.upiId,
+        uri: parsedUPI,
+      });
       await UPIPaymentService.openUPIPayment(parsedUPI);
     } catch (error: any) {
+      AppLogger.error('HomeScreen', 'Quick payment failed', error, { uri: parsedUPI });
       Alert.alert(
         'Payment Failed',
         error.message || 'Could not launch UPI application.',
@@ -156,13 +163,29 @@ export function HomeScreen({
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      {/* ══ Header (Fixed) ══ */}
+      {/* ══ Header ══ */}
       <View style={styles.header}>
         {quickProfilesQuery.isLoading ? (
           <HeaderSkeleton />
         ) : (
           <>
-            <View style={styles.headerProfiles}>
+            <View style={styles.headerTopRow}>
+              <Text style={styles.appTitle}>QR Manager</Text>
+              <Pressable
+                accessibilityLabel="Open settings"
+                accessibilityHint="Opens the application settings"
+                onPress={onGoToSettings}
+                style={styles.settingsButton}
+              >
+                <Ionicons name="settings-outline" size={20} color="#0F172A" />
+              </Pressable>
+            </View>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.headerProfiles}
+            >
               {headerProfiles.map((profile) => (
                 <HeaderAvatarChip
                   key={profile.id}
@@ -171,32 +194,22 @@ export function HomeScreen({
                   selected={profile.id === selectedProfile?.id}
                 />
               ))}
-
               <Pressable
                 accessibilityLabel="Create profile"
                 accessibilityHint="Opens the create profile screen"
                 onPress={onCreateProfile}
                 style={styles.addButton}
               >
-                <Text style={styles.addButtonText}>+</Text>
+                <Ionicons name="add" size={18} color="#64748B" />
               </Pressable>
-            </View>
-
-            <Pressable
-              accessibilityLabel="Open settings"
-              accessibilityHint="Opens the application settings"
-              onPress={onGoToSettings}
-              style={styles.settingsButton}
-            >
-              <Ionicons name="settings-sharp" size={17} color="#0F172A" />
-            </Pressable>
+            </ScrollView>
           </>
         )}
       </View>
 
-      {/* ══ Non-scrolling Main Container ══ */}
+      {/* ══ Main Content Container ══ */}
       <View style={styles.mainContainer}>
-        {/* ══ QR Preview Card (Fixed) ══ */}
+        {/* ══ QR Preview Card ══ */}
         <View style={styles.previewSection}>
           {settingsQuery.isLoading || defaultProfileQuery.isLoading ? (
             <View style={styles.card}>
@@ -204,78 +217,85 @@ export function HomeScreen({
             </View>
           ) : selectedProfile ? (
             <View style={styles.card}>
-              <QRPreview
-                initialPayload={
-                  useInitialPayload && selectedProfile.id === defaultProfileQuery.data?.id
-                    ? initialDefaultPayload
-                    : undefined
-                }
-                profile={selectedProfile}
-                runtimeAmount={runtimeAmount}
-                size={204}
-              />
+              {/* Card Top: Profile Name & Action Icons */}
+              <View style={styles.cardHeaderRow}>
+                <View style={styles.cardHeaderInfo}>
+                  <Text style={styles.profileName}>{selectedProfile.nickname}</Text>
+                  <Text style={styles.profileMeta}>{getProfileMeta(selectedProfile)}</Text>
+                </View>
+                <View style={styles.cardHeaderActions}>
+                  <Pressable
+                    accessibilityLabel="Set as default profile"
+                    accessibilityHint="Makes this profile open first on startup"
+                    disabled={isActionPending}
+                    onPress={handleSetDefault}
+                    style={styles.cardActionIcon}
+                  >
+                    <Ionicons
+                      name={isDefaultSelected ? 'star' : 'star-outline'}
+                      size={20}
+                      color={isDefaultSelected ? '#0D6B50' : '#64748B'}
+                    />
+                  </Pressable>
+                  <Pressable
+                    accessibilityLabel="Edit profile"
+                    accessibilityHint="Opens this profile for editing"
+                    disabled={isActionPending}
+                    onPress={() => onEditProfile(selectedProfile)}
+                    style={styles.cardActionIcon}
+                  >
+                    <Ionicons name="ellipsis-vertical" size={19} color="#64748B" />
+                  </Pressable>
+                </View>
+              </View>
 
-              <Text style={styles.profileName}>{selectedProfile.nickname}</Text>
-              <Text style={styles.profileMeta}>{getProfileMeta(selectedProfile)}</Text>
+              <View style={styles.qrContainer}>
+                <QRPreview
+                  initialPayload={
+                    useInitialPayload && selectedProfile.id === defaultProfileQuery.data?.id
+                      ? initialDefaultPayload
+                      : undefined
+                  }
+                  profile={selectedProfile}
+                  runtimeAmount={runtimeAmount}
+                  size={190}
+                />
+              </View>
 
               {selectedProfile.type === ProfileType.UPI && (
-                <>
-                  <View style={styles.amountRow}>
-                    <Text style={styles.amountLabel}>Amount ₹</Text>
-                    <TextInput
-                      accessibilityLabel="Runtime amount"
-                      accessibilityHint="Temporarily regenerates the UPI QR amount"
-                      keyboardType="decimal-pad"
-                      onChangeText={setRuntimeAmountText}
-                      placeholder="0"
-                      placeholderTextColor="#94A3B8"
-                      style={styles.amountInput}
-                      value={runtimeAmountText}
-                    />
+                <View style={styles.amountRow}>
+                  <TextInput
+                    accessibilityLabel="Runtime amount"
+                    accessibilityHint="Temporarily regenerates the UPI QR amount"
+                    keyboardType="decimal-pad"
+                    onChangeText={setRuntimeAmountText}
+                    placeholder="₹ Amount (optional)"
+                    placeholderTextColor="#94A3B8"
+                    style={styles.amountInput}
+                    value={runtimeAmountText}
+                  />
+
+                  {Boolean(runtimeAmountText) && (
                     <Pressable
-                      accessibilityLabel="Pay now"
-                      onPress={handlePay}
-                      style={styles.editButton}
+                      accessibilityLabel="Clear amount"
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      onPress={() => setRuntimeAmountText('')}
+                      style={styles.clearAmountButton}
                     >
-                      <Text >{'>'}</Text>
+                      <Ionicons name="close-circle" size={17} color="#94A3B8" />
                     </Pressable>
-                  </View>
-                </>
-              )}
+                  )}
 
-              <View style={styles.actionsRow}>
-                <Pressable
-                  accessibilityLabel="Edit profile"
-                  accessibilityHint="Opens this profile for editing"
-                  disabled={isActionPending}
-                  onPress={() => onEditProfile(selectedProfile)}
-                  style={styles.editButton}
-                >
-                  <Text style={styles.editButtonText}>Edit</Text>
-                </Pressable>
-
-                <Pressable
-                  accessibilityLabel="Set as default profile"
-                  accessibilityHint="Makes this profile open first on startup"
-                  disabled={isDefaultSelected || isActionPending}
-                  onPress={handleSetDefault}
-                  style={[
-                    styles.defaultButton,
-                    isDefaultSelected
-                      ? styles.defaultButtonActive
-                      : styles.defaultButtonInactive,
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.defaultButtonText,
-                      isDefaultSelected && styles.defaultButtonTextActive,
-                    ]}
+                  <Pressable
+                    accessibilityLabel="Pay now"
+                    accessibilityHint="Opens UPI payment app with this amount"
+                    onPress={handlePay}
+                    style={styles.payNowButton}
                   >
-                    {isDefaultSelected ? '✓ Default' : 'Set as Default'}
-                  </Text>
-                </Pressable>
-              </View>
+                    <Text style={styles.payNowButtonText}>Pay</Text>
+                  </Pressable>
+                </View>
+              )}
 
               {actionError && <Text style={styles.actionError}>{actionError}</Text>}
             </View>
@@ -297,9 +317,19 @@ export function HomeScreen({
           )}
         </View>
 
-        {/* ══ Profiles List Section (Scrollable within card) ══ */}
+        {/* ══ All Profiles List Section ══ */}
         <View style={styles.listSection}>
-          <Text style={styles.sectionTitle}>Profiles</Text>
+          <View style={styles.listSectionHeader}>
+            <Text style={styles.sectionTitle}>All profiles</Text>
+            <Pressable
+              accessibilityLabel="Create profile"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              onPress={onCreateProfile}
+            >
+              <Ionicons name="add" size={20} color="#64748B" />
+            </Pressable>
+          </View>
+
           <View style={styles.listCard}>
             {profilesQuery.isLoading ? (
               <ListSkeleton />
@@ -315,7 +345,6 @@ export function HomeScreen({
               >
                 {profiles.map((profile, index) => {
                   const isSelected = profile.id === selectedProfile?.id;
-                  const isDefault = settingsQuery.data?.defaultProfileId === profile.id;
                   const isLast = index === profiles.length - 1;
 
                   return (
@@ -332,12 +361,7 @@ export function HomeScreen({
                         !isLast && styles.profileRowBorder,
                       ]}
                     >
-                      <View
-                        style={[
-                          styles.listAvatar,
-                          { backgroundColor: profile.avatarColor },
-                        ]}
-                      >
+                      <View style={styles.listAvatar}>
                         <Text style={styles.listAvatarText}>
                           {AvatarService.createInitials(profile.nickname)}
                         </Text>
@@ -345,12 +369,10 @@ export function HomeScreen({
 
                       <View style={styles.profileText}>
                         <Text style={styles.rowName}>{profile.nickname}</Text>
-                        <Text style={styles.rowMeta}>{getListProfileMeta(profile)}</Text>
                       </View>
 
                       <View style={styles.rowRight}>
-                        {isDefault && <Text style={styles.defaultBadge}>Default</Text>}
-                        <Text style={styles.chevron}>›</Text>
+                        <Text style={styles.rowMeta}>{profile.type}</Text>
                       </View>
                     </Pressable>
                   );
@@ -361,32 +383,16 @@ export function HomeScreen({
         </View>
       </View>
 
-      {/* ══ Bottom Navigation Bar ══ */}
-      <View style={styles.bottomNav}>
+      {/* ══ Floating Scan QR Bottom Bar ══ */}
+      <View style={styles.bottomDock}>
         <Pressable
-          accessibilityLabel="Home tab"
-          style={styles.navItem}
-        >
-          <Ionicons name="home" size={22} color="#2563EB" />
-          <Text style={[styles.navText, styles.navTextActive]}>Home</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityLabel="Create profile tab"
-          onPress={onCreateProfile}
-          style={styles.navItem}
-        >
-          <Ionicons name="add-circle-outline" size={23} color="#64748B" />
-          <Text style={styles.navText}>Create</Text>
-        </Pressable>
-
-        <Pressable
-          accessibilityLabel="Scan QR tab"
+          accessibilityLabel="Scan QR"
+          accessibilityHint="Opens the camera to scan a UPI QR code"
           onPress={onScanQR}
-          style={styles.navItem}
+          style={styles.floatingScanButton}
         >
-          <Ionicons name="qr-code-outline" size={22} color="#64748B" />
-          <Text style={styles.navText}>Scan QR</Text>
+          <Ionicons name="scan-outline" size={20} color="#FFFFFF" />
+          <Text style={styles.floatingScanText}>Scan QR</Text>
         </Pressable>
       </View>
     </SafeAreaView>
@@ -410,13 +416,17 @@ function HeaderAvatarChip({
       accessibilityHint="Shows this profile in the preview"
       onPress={onPress}
       style={[
-        styles.headerAvatar,
-        { backgroundColor: profile.avatarColor },
-        selected && styles.selectedHeaderAvatar,
+        styles.headerPill,
+        selected ? styles.selectedHeaderPill : styles.unselectedHeaderPill,
       ]}
     >
-      <Text style={styles.headerAvatarText}>
-        {AvatarService.createInitials(profile.nickname)}
+      <Text
+        style={[
+          styles.headerPillText,
+          selected ? styles.selectedHeaderPillText : styles.unselectedHeaderPillText,
+        ]}
+      >
+        {profile.nickname}
       </Text>
     </Pressable>
   );
@@ -497,171 +507,167 @@ function getListProfileMeta(profile: Profile): string {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F2EDE8',
   },
   header: {
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
+    backgroundColor: '#F2EDE8',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  appTitle: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#0F172A',
+    letterSpacing: -0.5,
+  },
+  settingsButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   headerProfiles: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 8,
   },
-  headerAvatar: {
-    width: 40,
-    height: 40,
+  headerPill: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
     borderRadius: 20,
-    alignItems: 'center',
     justifyContent: 'center',
+    alignItems: 'center',
   },
-  selectedHeaderAvatar: {
-    borderWidth: 2.5,
-    borderColor: '#0F172A',
+  selectedHeaderPill: {
+    backgroundColor: '#0D6B50',
   },
-  headerAvatarText: {
-    color: '#FFFFFF',
+  unselectedHeaderPill: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  headerPillText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
+  },
+  selectedHeaderPillText: {
+    color: '#FFFFFF',
+  },
+  unselectedHeaderPillText: {
+    color: '#334155',
   },
   addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#CBD5E1',
     backgroundColor: '#FFFFFF',
   },
-  addButtonText: {
-    color: '#64748B',
-    fontSize: 20,
-    lineHeight: 22,
-    fontWeight: '300',
-  },
-  settingsButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   mainContainer: {
     flex: 1,
   },
   previewSection: {
-    paddingHorizontal: 14,
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingHorizontal: 16,
+    paddingTop: 4,
+    paddingBottom: 8,
   },
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 22,
+    padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 12,
-    alignItems: 'center',
+    borderColor: '#EAE6E1',
     shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
     elevation: 2,
   },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  cardHeaderInfo: {
+    flex: 1,
+  },
+  cardHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cardActionIcon: {
+    padding: 4,
+  },
   profileName: {
-    marginTop: 8,
     color: '#0F172A',
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
-    textAlign: 'center',
   },
   profileMeta: {
     marginTop: 2,
     color: '#64748B',
     fontSize: 12,
-    textAlign: 'center',
+  },
+  qrContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
   },
   amountRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     marginTop: 8,
-    height: 46,
-    backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    alignSelf: 'stretch',
-  },
-  amountLabel: {
-    color: '#64748B',
-    fontSize: 13,
-    fontWeight: '600',
   },
   amountInput: {
     flex: 1,
-    borderWidth: 0,
-    backgroundColor: 'transparent',
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#0F172A',
-    paddingVertical: 0,
-    paddingHorizontal: 4,
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 8,
-    alignSelf: 'stretch',
-  },
-  editButton: {
-    flex: 1,
-    height: 36,
+    height: 44,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#0F172A',
+    paddingHorizontal: 12,
+  },
+  clearAmountButton: {
+    position: 'absolute',
+    right: 88,
+    padding: 4,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  editButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  defaultButton: {
-    flex: 1,
-    height: 36,
-    borderWidth: 1,
-    borderRadius: 8,
+  payNowButton: {
+    height: 44,
+    paddingHorizontal: 22,
+    borderRadius: 12,
+    backgroundColor: '#0D6B50',
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#0D6B50',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 2,
   },
-  defaultButtonActive: {
-    borderColor: '#2563EB',
-    backgroundColor: '#EFF6FF',
-  },
-  defaultButtonInactive: {
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-  },
-  defaultButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0F172A',
-  },
-  defaultButtonTextActive: {
-    color: '#2563EB',
+  payNowButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FFFFFF',
   },
   actionError: {
     marginTop: 6,
@@ -672,7 +678,7 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     alignItems: 'center',
-    paddingVertical: 20,
+    paddingVertical: 24,
   },
   emptyTitle: {
     color: '#0F172A',
@@ -686,8 +692,8 @@ const styles = StyleSheet.create({
   },
   emptyButton: {
     marginTop: 14,
-    borderRadius: 8,
-    backgroundColor: '#2563EB',
+    borderRadius: 10,
+    backgroundColor: '#0D6B50',
     paddingVertical: 10,
     paddingHorizontal: 18,
   },
@@ -698,24 +704,27 @@ const styles = StyleSheet.create({
   },
   listSection: {
     flex: 1,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingTop: 4,
-    paddingBottom: 12,
+    paddingBottom: 76,
+  },
+  listSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 11,
+    fontSize: 14,
     fontWeight: '600',
-    color: '#94A3B8',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    marginBottom: 6,
+    color: '#475569',
   },
   listCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#EAE6E1',
     overflow: 'hidden',
   },
   listScrollView: {
@@ -727,28 +736,29 @@ const styles = StyleSheet.create({
   profileRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 12,
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   selectedProfileRow: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: '#E6F4F0',
   },
   profileRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: '#F8FAFC',
   },
   listAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#E6F4F0',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
   },
   listAvatarText: {
-    color: '#FFFFFF',
-    fontSize: 11,
+    color: '#0D6B50',
+    fontSize: 13,
     fontWeight: '700',
   },
   profileText: {
@@ -756,29 +766,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
   rowName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: '#0F172A',
   },
   rowMeta: {
-    marginTop: 1,
-    fontSize: 11,
-    color: '#94A3B8',
+    fontSize: 12,
+    color: '#64748B',
   },
   rowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-  },
-  defaultBadge: {
-    color: '#2563EB',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  chevron: {
-    color: '#CBD5E1',
-    fontSize: 16,
-    lineHeight: 18,
   },
   emptyListPadding: {
     padding: 16,
@@ -805,8 +803,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#E2E8F0',
   },
   skeletonQr: {
-    width: 204,
-    height: 204,
+    width: 190,
+    height: 190,
     borderRadius: 4,
     backgroundColor: '#E2E8F0',
   },
@@ -842,29 +840,32 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: '#E2E8F0',
   },
-  bottomNav: {
-    height: 60,
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-around',
-  },
-  navItem: {
-    flex: 1,
+  bottomDock: {
+    position: 'absolute',
+    bottom: 20,
+    left: 0,
+    right: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 6,
   },
-  navText: {
-    fontSize: 11,
-    fontWeight: '500',
-    color: '#64748B',
-    marginTop: 2,
+  floatingScanButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#0D6B50',
+    borderRadius: 24,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    shadowColor: '#0D6B50',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  navTextActive: {
-    color: '#2563EB',
+  floatingScanText: {
+    color: '#FFFFFF',
+    fontSize: 15,
     fontWeight: '700',
   },
 });

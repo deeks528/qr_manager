@@ -82,21 +82,29 @@ export function CreateProfileScreen({ onCancel, onSaved }: CreateProfileScreenPr
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.keyboardView}>
         <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
           <View style={styles.topBar}>
-            <Pressable accessibilityLabel="Cancel create profile" accessibilityHint="Returns to Home" onPress={onCancel} style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Cancel</Text>
+            <Pressable
+              accessibilityLabel="Cancel create profile"
+              accessibilityHint="Returns to Home"
+              onPress={onCancel}
+              style={styles.cancelTextButton}
+            >
+              <Text style={styles.cancelButtonText}>Cancel</Text>
             </Pressable>
+
+            <Text style={styles.navTitle}>New profile</Text>
+
             <Pressable
               accessibilityLabel="Save profile"
               accessibilityHint="Creates this QR profile"
               disabled={!canSave}
               onPress={handleSave}
-              style={[styles.primaryButton, !canSave && styles.disabledButton]}
+              style={styles.saveTextButton}
             >
-              <Text style={styles.primaryButtonText}>{createProfile.isPending ? 'Saving' : 'Save'}</Text>
+              <Text style={[styles.saveButtonText, !canSave && styles.saveButtonTextDisabled]}>
+                {createProfile.isPending ? 'Saving' : 'Save'}
+              </Text>
             </Pressable>
           </View>
-
-          <Text style={styles.title}>Create Profile</Text>
 
           <ScrollView
             horizontal
@@ -106,27 +114,30 @@ export function CreateProfileScreen({ onCancel, onSaved }: CreateProfileScreenPr
             <TypeCard label="UPI" selected={selectedType === ProfileType.UPI} onPress={() => setSelectedType(ProfileType.UPI)} />
             <TypeCard label="WhatsApp" selected={selectedType === ProfileType.WhatsApp} onPress={() => setSelectedType(ProfileType.WhatsApp)} />
             <TypeCard label="Custom" selected={selectedType === ProfileType.Custom} onPress={() => setSelectedType(ProfileType.Custom)} />
-            <TypeCard label="Import QR" selected={selectedType === ProfileType.Other} onPress={() => setSelectedType(ProfileType.Other)} />
+            <TypeCard label="Import" selected={selectedType === ProfileType.Other} onPress={() => setSelectedType(ProfileType.Other)} />
           </ScrollView>
 
-          <Field label="Nickname" value={nickname} onChangeText={setNickname} placeholder="Home Account" />
+          <Field label="Nickname" value={nickname} onChangeText={setNickname} placeholder="Home account" />
 
           {selectedType === ProfileType.UPI && (
             <>
               <Field label="UPI ID" value={upiId} onChangeText={setUpiId} placeholder="name@bank" autoCapitalize="none" />
               <Field
-                label="Minimum Amount"
+                label="Minimum amount (optional)"
                 value={minimumAmount}
                 onChangeText={setMinimumAmount}
                 placeholder="0"
                 keyboardType="decimal-pad"
               />
               <Field
-                label="Default Description"
+                label="Default note"
                 value={defaultDescription}
                 onChangeText={setDefaultDescription}
                 placeholder="Payment"
               />
+              <Text style={styles.helperText}>
+                You'll choose a UPI app after scanning, so there's no need to add one here.
+              </Text>
             </>
           )}
 
@@ -306,27 +317,48 @@ function Field({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F2EDE8',
   },
   keyboardView: {
     flex: 1,
   },
   content: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
     paddingBottom: 40,
   },
   topBar: {
-    minHeight: 56,
+    minHeight: 52,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  title: {
-    marginTop: 8,
-    marginBottom: 20,
-    color: '#0F172A',
-    fontSize: 26,
+  navTitle: {
+    fontSize: 17,
     fontWeight: '700',
+    color: '#0F172A',
+  },
+  cancelTextButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: '#0F172A',
+  },
+  saveTextButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  saveButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#0D6B50',
+  },
+  saveButtonTextDisabled: {
+    color: '#94A3B8',
   },
   typeGrid: {
     flexDirection: 'row',
@@ -334,95 +366,66 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   typeCard: {
-    flex: 1,
-    minHeight: 56,
-    borderRadius: 8,
+    minHeight: 38,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
-    minWidth: 100,
+    paddingHorizontal: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 8,
   },
   selectedTypeCard: {
-    borderColor: '#2563EB',
-    backgroundColor: '#DBEAFE',
+    borderColor: '#0D6B50',
+    backgroundColor: '#0D6B50',
   },
   typeCardText: {
     color: '#334155',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
     textAlign: 'center',
   },
   selectedTypeCardText: {
-    color: '#1D4ED8',
+    color: '#FFFFFF',
   },
   fieldGroup: {
-    marginBottom: 14,
+    marginBottom: 16,
   },
   label: {
     marginBottom: 6,
     color: '#334155',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '600',
   },
   input: {
     minHeight: 48,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
     color: '#0F172A',
-    fontSize: 16,
-    paddingHorizontal: 12,
+    fontSize: 15,
+    paddingHorizontal: 14,
   },
   textArea: {
     minHeight: 120,
     borderWidth: 1,
-    borderColor: "#CBD5E1",
-    borderRadius: 8,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
     padding: 12,
-    textAlignVertical: "top",
+    textAlignVertical: 'top',
   },
   counter: {
-    alignSelf: "flex-end",
+    alignSelf: 'flex-end',
     marginTop: 4,
-    color: "#64748B",
+    color: '#64748B',
     fontSize: 12,
   },
-  primaryButton: {
-    minHeight: 48,
-    minWidth: 88,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#2563EB',
-    paddingHorizontal: 16,
-  },
-  disabledButton: {
-    backgroundColor: '#94A3B8',
-  },
-  primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  secondaryButton: {
-    minHeight: 48,
-    minWidth: 88,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 16,
-  },
-  secondaryButtonText: {
-    color: '#334155',
-    fontSize: 15,
-    fontWeight: '700',
+  helperText: {
+    marginTop: 8,
+    color: '#64748B',
+    fontSize: 12,
+    lineHeight: 18,
   },
   error: {
     marginTop: 6,
@@ -435,7 +438,7 @@ const styles = StyleSheet.create({
   },
   pickImageButton: {
     minHeight: 120,
-    borderRadius: 8,
+    borderRadius: 12,
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: '#CBD5E1',
@@ -456,20 +459,20 @@ const styles = StyleSheet.create({
   imagePreview: {
     width: '100%',
     height: 200,
-    borderRadius: 8,
+    borderRadius: 12,
     backgroundColor: '#F1F5F9',
   },
   changeImageButton: {
     marginTop: 12,
     paddingVertical: 8,
     paddingHorizontal: 16,
-    borderRadius: 6,
-    backgroundColor: '#EFF6FF',
+    borderRadius: 8,
+    backgroundColor: '#E6F4F0',
     borderWidth: 1,
-    borderColor: '#BFDBFE',
+    borderColor: '#A8D5C5',
   },
   changeImageButtonText: {
-    color: '#2563EB',
+    color: '#0D6B50',
     fontSize: 14,
     fontWeight: '600',
   },

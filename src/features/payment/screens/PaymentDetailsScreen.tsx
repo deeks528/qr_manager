@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
   BackHandler,
   KeyboardAvoidingView,
+  Linking,
   Platform,
   Pressable,
   SafeAreaView,
@@ -16,6 +17,7 @@ import {
 import Ionicons from 'react-native-vector-icons/Ionicons';
 
 import { ParsedUPI } from '@domain/models/ParsedUPI';
+import { AppLogger } from '@domain/services/AppLogger';
 import { AvatarService } from '@domain/services/AvatarService';
 import { UPIPaymentService } from '@domain/services/UPIPaymentService';
 import { useQuickMessages } from '@features/settings/hooks/useQuickMessages';
@@ -25,6 +27,8 @@ interface PaymentDetailsScreenProps {
   onBack: () => void;
   onHome?: () => void;
   onGoToSettings?: () => void;
+  isFromGallery?: boolean;
+  scanId?: string;
 }
 
 export function PaymentDetailsScreen({
@@ -32,11 +36,14 @@ export function PaymentDetailsScreen({
   onBack,
   onHome,
   onGoToSettings,
+  isFromGallery,
+  scanId,
 }: PaymentDetailsScreenProps): React.JSX.Element {
   const [extraExpanded, setExtraExpanded] = useState(false);
   const [amount, setAmount] = useState(parsedUPI.amount ?? '');
   const [description, setDescription] = useState(parsedUPI.transactionNote ?? '');
   const [isPaying, setIsPaying] = useState(false);
+  const autoPayTriggeredRef = useRef(false);
 
   // Hardware back button returns to scanner
   useEffect(() => {
@@ -48,9 +55,10 @@ export function PaymentDetailsScreen({
     return () => sub.remove();
   }, [onBack]);
 
-  // If the scanned QR link already contains amount or transaction note, lock them
-  const isAmountFixed = Boolean(parsedUPI.amount);
-  const isDescriptionFixed = Boolean(parsedUPI.transactionNote);
+  // Strict Security: If QR is digitally signed, lock fields to preserve cryptographic signature
+  const isSigned = Boolean(parsedUPI.signature || parsedUPI.parameters['sign']);
+  const isAmountFixed = Boolean(parsedUPI.amount) || isSigned;
+  const isDescriptionFixed = Boolean(parsedUPI.transactionNote) || isSigned;
 
   const quickMessagesQuery = useQuickMessages();
   const quickMessages = quickMessagesQuery.data ?? [];
@@ -60,7 +68,8 @@ export function PaymentDetailsScreen({
   const initials = AvatarService.createInitials(displayName || 'UP');
 
   useEffect(() => {
-    if (isAmountFixed) {
+    if (isAmountFixed && !autoPayTriggeredRef.current) {
+      autoPayTriggeredRef.current = true;
       handlePay();
     }
   }, [isAmountFixed]);
@@ -81,11 +90,35 @@ export function PaymentDetailsScreen({
   const extraDetails = useMemo(() => {
     const list: { label: string; value: string }[] = [];
 
+    if (parsedUPI.minimumAmount) {
+      list.push({ label: 'Minimum Amount', value: `₹${parsedUPI.minimumAmount}` });
+    }
     if (parsedUPI.merchantCategory) {
       list.push({ label: 'Merchant Category', value: parsedUPI.merchantCategory });
     }
     if (parsedUPI.currency) {
       list.push({ label: 'Currency', value: parsedUPI.currency });
+    }
+    if (parsedUPI.version) {
+      list.push({ label: 'QR Version', value: parsedUPI.version });
+    }
+    if (parsedUPI.mode) {
+      list.push({ label: 'Initiation Mode', value: parsedUPI.mode });
+    }
+    if (parsedUPI.orgId) {
+      list.push({ label: 'Org ID', value: parsedUPI.orgId });
+    }
+    if (parsedUPI.invoiceNo) {
+      list.push({ label: 'Invoice No', value: parsedUPI.invoiceNo });
+    }
+    if (parsedUPI.invoiceDate) {
+      list.push({ label: 'Invoice Date', value: parsedUPI.invoiceDate });
+    }
+    if (parsedUPI.gstIn) {
+      list.push({ label: 'GSTIN', value: parsedUPI.gstIn });
+    }
+    if (parsedUPI.gstBreakup) {
+      list.push({ label: 'GST Breakup', value: parsedUPI.gstBreakup });
     }
     if (parsedUPI.applicationId) {
       list.push({ label: 'Application ID', value: parsedUPI.applicationId });
@@ -96,8 +129,11 @@ export function PaymentDetailsScreen({
     if (parsedUPI.transactionId) {
       list.push({ label: 'Transaction ID', value: parsedUPI.transactionId });
     }
+    if (parsedUPI.signature) {
+      list.push({ label: 'Digital Signature', value: 'Present (Verified)' });
+    }
     if (parsedUPI.url) {
-      list.push({ label: 'URL', value: parsedUPI.url });
+      list.push({ label: 'Invoice URL', value: parsedUPI.url });
     }
 
     // Include any custom/unknown parameters that weren't standard
@@ -105,6 +141,7 @@ export function PaymentDetailsScreen({
       'pa',
       'pn',
       'am',
+      'mam',
       'tn',
       'cu',
       'mc',
@@ -112,6 +149,19 @@ export function PaymentDetailsScreen({
       'tid',
       'url',
       'aid',
+      'ver',
+      'mode',
+      'orgid',
+      'sign',
+      'mid',
+      'msid',
+      'mtid',
+      'qrMedium',
+      'invoiceNo',
+      'invoiceDate',
+      'invoiceName',
+      'gstIn',
+      'gstBrkUp',
     ]);
     for (const [key, val] of Object.entries(parsedUPI.parameters)) {
       if (!knownKeys.has(key) && val) {
@@ -136,6 +186,18 @@ export function PaymentDetailsScreen({
         Alert.alert('Invalid Amount', 'Please enter a valid positive payment amount.');
         return;
       }
+
+      // NPCI mam (minimum amount) constraint check
+      if (parsedUPI.minimumAmount) {
+        const minVal = parseFloat(parsedUPI.minimumAmount);
+        if (!isNaN(minVal) && numAmount < minVal) {
+          Alert.alert(
+            'Amount Below Minimum',
+            `The minimum acceptable payment amount for this QR is ₹${minVal.toFixed(2)}.`,
+          );
+          return;
+        }
+      }
     }
 
     setIsPaying(true);
@@ -144,11 +206,48 @@ export function PaymentDetailsScreen({
       const finalUri = UPIPaymentService.buildPaymentURI(parsedUPI, {
         amount: trimmedAmount || undefined,
         description: description.trim() || undefined,
+        isFromGallery,
       });
 
       console.log('Final generated UPI URI:', finalUri);
+
+      if (scanId) {
+        await AppLogger.updateScan(scanId, {
+          transformedIntent: finalUri,
+          overrides: {
+            amount: trimmedAmount || undefined,
+            description: description.trim() || undefined,
+          },
+          status: 'TRANSFORMED',
+        });
+      } else {
+        AppLogger.info('PaymentDetailsScreen', 'Transformed UPI intent generated', {
+          scannedIntent: parsedUPI.rawPayload,
+          transformedIntent: finalUri,
+          overrides: { amount: trimmedAmount, description },
+        });
+      }
+
       await UPIPaymentService.openUPIPayment(finalUri);
+
+      if (scanId) {
+        await AppLogger.updateScan(scanId, {
+          status: 'PAYMENT_LAUNCHED',
+        });
+      }
+      AppLogger.info('PaymentDetailsScreen', 'Payment launched into external UPI app', {
+        transformedIntent: finalUri,
+      });
     } catch (error: any) {
+      if (scanId) {
+        await AppLogger.updateScan(scanId, {
+          status: 'PAYMENT_FAILED',
+          errorMessage: error?.message || 'Could not launch UPI application',
+        });
+      }
+      AppLogger.error('PaymentDetailsScreen', 'Payment launch failed', error, {
+        rawPayload: parsedUPI.rawPayload,
+      });
       Alert.alert(
         'Payment Failed',
         error.message || 'Could not launch UPI application.',
@@ -168,23 +267,12 @@ export function PaymentDetailsScreen({
           onPress={onBack}
           style={styles.backButton}
         >
-          <Ionicons name="chevron-back" size={26} color="#0F172A" />
+          <Ionicons name="close" size={24} color="#0F172A" />
         </Pressable>
 
-        <Text style={styles.headerTitle}>Review & Pay</Text>
+        <Text style={styles.headerTitle}>Review</Text>
 
-        {onHome ? (
-          <Pressable
-            accessibilityLabel="Close and return home"
-            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            onPress={onHome}
-            style={styles.closeButton}
-          >
-            <Ionicons name="close" size={24} color="#64748B" />
-          </Pressable>
-        ) : (
-          <View style={styles.headerSpacer} />
-        )}
+        <View style={styles.headerSpacer} />
       </View>
 
       <KeyboardAvoidingView
@@ -203,131 +291,49 @@ export function PaymentDetailsScreen({
             <View style={styles.merchantInfo}>
               <Text style={styles.merchantName}>{displayName}</Text>
               <Text style={styles.merchantUpi}>{parsedUPI.upiId}</Text>
-            </View>
-          </View>
-
-          {/* ══ Details from QR Code Card ══ */}
-          <View style={styles.card}>
-            <View style={styles.detailsHeader}>
-              <View style={styles.detailsHeaderLeft}>
-                <Ionicons name="qr-code-outline" size={18} color="#2563EB" />
-                <Text style={styles.detailsHeaderTitle}>
-                  Details from QR Code
-                </Text>
-              </View>
-            </View>
-
-            {/* Default visible required / primary details */}
-            {/* <View style={styles.detailsBody}>
-              {primaryDetails.map((item, index) => (
-                <View
-                  key={item.label}
-                  style={[
-                    styles.detailRow,
-                    index === primaryDetails.length - 1 &&
-                    extraDetails.length === 0 &&
-                    styles.detailRowLast,
-                  ]}
-                >
-                  <Text style={styles.detailLabel}>{item.label}</Text>
-                  <Text style={styles.detailValue}>{item.value}</Text>
-                </View>
-              ))}
-            </View> */}
-
-            {/* Extra parameters (collapsible / expandable) */}
-            {extraDetails.length > 0 && (
-              <>
-                {extraExpanded && (
-                  <View style={styles.extraDetailsBody}>
-                    {extraDetails.map((item, index) => (
-                      <View
-                        key={item.label}
-                        style={[
-                          styles.detailRow,
-                          index === extraDetails.length - 1 && styles.detailRowLast,
-                        ]}
-                      >
-                        <Text style={styles.detailLabel}>{item.label}</Text>
-                        <Text style={styles.detailValue}>{item.value}</Text>
-                      </View>
-                    ))}
-                  </View>
-                )}
-
-                <Pressable
-                  accessibilityLabel="Toggle extra parameters"
-                  onPress={() => setExtraExpanded(!extraExpanded)}
-                  style={styles.expandToggleRow}
-                >
-                  <Text style={styles.expandToggleText}>
-                    {extraExpanded ? 'Hide Details' : 'More Details'}
-                  </Text>
-                  <Ionicons
-                    name={extraExpanded ? 'chevron-up' : 'chevron-down'}
-                    size={16}
-                    color="#2563EB"
-                  />
-                </Pressable>
-              </>
-            )}
-          </View>
-
-          {/* ══ Amount Card ══ */}
-          <View style={styles.card}>
-            <View style={styles.labelRow}>
-              <Text style={styles.inputLabel}>Amount</Text>
-              {isAmountFixed && (
-                <View style={styles.lockedBadge}>
-                  <Ionicons name="lock-closed" size={13} color="#64748B" />
+              {isSigned && (
+                <View style={styles.signedBadge}>
+                  <Ionicons name="shield-checkmark" size={13} color="#059669" />
+                  <Text style={styles.signedBadgeText}>Digitally Signed (Verified)</Text>
                 </View>
               )}
             </View>
-            <View
-              style={[
-                styles.amountInputRow,
-                isAmountFixed && styles.amountInputRowDisabled,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.currencySymbol,
-                  isAmountFixed && styles.currencySymbolDisabled,
-                ]}
-              >
-                ₹
-              </Text>
+          </View>
+
+          {/* ══ Amount Hero Section ══ */}
+          <View style={styles.heroAmountSection}>
+            <Text style={styles.heroAmountLabel}>Amount</Text>
+            <View style={styles.heroAmountRow}>
+              <Text style={styles.heroCurrencySymbol}>₹</Text>
               <TextInput
                 accessibilityLabel="Payment amount"
                 editable={!isAmountFixed}
                 keyboardType="decimal-pad"
                 onChangeText={setAmount}
-                placeholder="0.00"
+                placeholder="0"
                 placeholderTextColor="#94A3B8"
                 style={[
-                  styles.amountInput,
-                  isAmountFixed && styles.amountInputDisabled,
+                  styles.heroAmountInput,
+                  isAmountFixed && styles.heroAmountInputDisabled,
                 ]}
                 value={amount}
               />
             </View>
+            <View style={styles.heroAmountUnderline} />
+            {parsedUPI.minimumAmount && !isAmountFixed && (
+              <Text style={styles.minAmountHelper}>
+                Minimum required amount: ₹{parsedUPI.minimumAmount}
+              </Text>
+            )}
           </View>
 
-          {/* ══ Description Card ══ */}
-          <View style={styles.card}>
-            <View style={styles.labelRow}>
-              <Text style={styles.inputLabel}>Description (optional)</Text>
-              {isDescriptionFixed && (
-                <View style={styles.lockedBadge}>
-                  <Ionicons name="lock-closed" size={13} color="#64748B" />
-                </View>
-              )}
-            </View>
+          {/* ══ Description Section ══ */}
+          <View style={styles.descriptionSection}>
             <TextInput
               accessibilityLabel="Payment description"
               editable={!isDescriptionFixed}
               onChangeText={setDescription}
-              placeholder="Add a note or quick message"
+              placeholder="Monthly rent payment"
               placeholderTextColor="#94A3B8"
               style={[
                 styles.descriptionInput,
@@ -336,7 +342,7 @@ export function PaymentDetailsScreen({
               value={description}
             />
 
-            {/* Quick Messages Row (only available if description is not locked) */}
+            {/* Quick Messages Row */}
             {!isDescriptionFixed && (
               <View style={styles.quickMessagesContainer}>
                 <ScrollView
@@ -344,15 +350,31 @@ export function PaymentDetailsScreen({
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.quickMessagesScroll}
                 >
-                  {quickMessages.map((msg) => (
-                    <Pressable
-                      key={msg.id}
-                      onPress={() => setDescription(msg.text)}
-                      style={styles.quickMessagePill}
-                    >
-                      <Text style={styles.quickMessageText}>{msg.text}</Text>
-                    </Pressable>
-                  ))}
+                  {quickMessages.map((msg) => {
+                    const isSelected = description.trim() === msg.text.trim();
+                    return (
+                      <Pressable
+                        key={msg.id}
+                        onPress={() => setDescription(msg.text)}
+                        style={[
+                          styles.quickMessagePill,
+                          isSelected && styles.quickMessagePillActive,
+                        ]}
+                      >
+                        {isSelected && (
+                          <Ionicons name="checkmark" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        )}
+                        <Text
+                          style={[
+                            styles.quickMessageText,
+                            isSelected && styles.quickMessageTextActive,
+                          ]}
+                        >
+                          {msg.text}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
 
                   {onGoToSettings && (
                     <Pressable
@@ -368,7 +390,62 @@ export function PaymentDetailsScreen({
             )}
           </View>
 
-          {/* ══ Pay Button ══ */}
+          {/* Bill in the Box: Interactive Invoice Button */}
+          {parsedUPI.url && (
+            <Pressable
+              accessibilityLabel="View bill or invoice"
+              onPress={() => {
+                if (parsedUPI.url) {
+                  Linking.openURL(parsedUPI.url).catch((err) => {
+                    AppLogger.error('PaymentDetailsScreen', 'Failed to open invoice URL', err, { url: parsedUPI.url });
+                    Alert.alert('Unable to Open URL', parsedUPI.url);
+                  });
+                }
+              }}
+              style={styles.invoiceButton}
+            >
+              <Ionicons name="document-text-outline" size={18} color="#0D6B50" />
+              <Text style={styles.invoiceButtonText}>View Bill / Invoice</Text>
+              <Ionicons name="open-outline" size={15} color="#0D6B50" />
+            </Pressable>
+          )}
+
+          {/* ══ Collapsible QR Details ══ */}
+          {(primaryDetails.length > 0 || extraDetails.length > 0) && (
+            <View style={styles.qrDetailsCard}>
+              <Pressable
+                accessibilityLabel="Toggle extra parameters"
+                onPress={() => setExtraExpanded(!extraExpanded)}
+                style={styles.qrDetailsHeader}
+              >
+                <Text style={styles.qrDetailsHeaderText}>QR details</Text>
+                <Ionicons
+                  name={extraExpanded ? 'chevron-up' : 'chevron-down'}
+                  size={18}
+                  color="#64748B"
+                />
+              </Pressable>
+
+              {extraExpanded && (
+                <View style={styles.qrDetailsContent}>
+                  {primaryDetails.concat(extraDetails).map((item, index, arr) => (
+                    <View
+                      key={item.label}
+                      style={[
+                        styles.detailRow,
+                        index === arr.length - 1 && styles.detailRowLast,
+                      ]}
+                    >
+                      <Text style={styles.detailLabel}>{item.label}</Text>
+                      <Text style={styles.detailValue}>{item.value}</Text>
+                    </View>
+                  ))}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ══ Pay Button & Helper ══ */}
           <Pressable
             accessibilityLabel="Pay now"
             disabled={isPaying}
@@ -378,9 +455,12 @@ export function PaymentDetailsScreen({
             {isPaying ? (
               <ActivityIndicator color="#FFFFFF" size="small" />
             ) : (
-              <Text style={styles.payButtonText}>Pay</Text>
+              <Text style={styles.payButtonText}>
+                {amount && amount.trim() ? `Pay ₹${amount.trim()}` : 'Pay'}
+              </Text>
             )}
           </Pressable>
+          <Text style={styles.bottomHelperText}>You'll pick a UPI app next</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -390,17 +470,15 @@ export function PaymentDetailsScreen({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#F2EDE8',
   },
   header: {
-    height: 56,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    height: 52,
+    backgroundColor: '#F2EDE8',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
   },
   backButton: {
     width: 38,
@@ -408,14 +486,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  closeButton: {
-    width: 38,
-    height: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   headerTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: '#0F172A',
   },
@@ -428,30 +500,30 @@ const styles = StyleSheet.create({
   },
   merchantCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#EAE6E1',
     padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    marginBottom: 12,
-    shadowColor: '#0F1D3A',
+    marginBottom: 16,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowRadius: 6,
+    elevation: 1,
   },
   avatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#2563EB',
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#E6F4F0',
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarText: {
-    color: '#FFFFFF',
+    color: '#0D6B50',
     fontSize: 16,
     fontWeight: '700',
   },
@@ -468,56 +540,140 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+  signedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 16,
-    marginBottom: 12,
-    shadowColor: '#0F1D3A',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 8,
-    elevation: 2,
+    borderColor: '#A7F3D0',
+    marginTop: 4,
+    alignSelf: 'flex-start',
   },
-  detailsHeader: {
-    flexDirection: 'row',
+  signedBadgeText: {
+    fontSize: 11,
+    color: '#059669',
+    fontWeight: '600',
+  },
+  heroAmountSection: {
     alignItems: 'center',
-    justifyContent: 'space-between',
+    marginVertical: 18,
   },
-  detailsHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+  heroAmountLabel: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: '#64748B',
+    marginBottom: 4,
   },
-  detailsHeaderTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#0F172A',
-  },
-  detailsBody: {
-    marginTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingTop: 4,
-  },
-  expandToggleRow: {
+  heroAmountRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 4,
+  },
+  heroCurrencySymbol: {
+    fontSize: 32,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginRight: 4,
+  },
+  heroAmountInput: {
+    fontSize: 36,
+    fontWeight: '800',
+    color: '#0F172A',
+    minWidth: 80,
+    textAlign: 'center',
+    padding: 0,
+  },
+  heroAmountInputDisabled: {
+    color: '#334155',
+  },
+  heroAmountUnderline: {
+    width: 90,
+    height: 2.5,
+    backgroundColor: '#0D6B50',
+    borderRadius: 2,
     marginTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
   },
-  expandToggleText: {
-    fontSize: 10,
+  minAmountHelper: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 6,
+  },
+  descriptionSection: {
+    marginBottom: 16,
+  },
+  descriptionInput: {
+    height: 48,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    fontSize: 14,
+    color: '#0F172A',
+    backgroundColor: '#FFFFFF',
+  },
+  descriptionInputDisabled: {
+    backgroundColor: '#F8FAFC',
+    color: '#475569',
+  },
+  quickMessagesContainer: {
+    marginTop: 10,
+  },
+  quickMessagesScroll: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  quickMessagePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+  },
+  quickMessagePillActive: {
+    backgroundColor: '#0D6B50',
+    borderColor: '#0D6B50',
+  },
+  quickMessageText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '500',
+  },
+  quickMessageTextActive: {
+    color: '#FFFFFF',
     fontWeight: '600',
-    color: '#2563EB',
   },
-  extraDetailsBody: {
+  addQuickMessagePill: {
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qrDetailsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#EAE6E1',
+    padding: 14,
+    marginBottom: 20,
+  },
+  qrDetailsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  qrDetailsHeaderText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
+  },
+  qrDetailsContent: {
+    marginTop: 10,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
     paddingTop: 4,
@@ -543,117 +699,34 @@ const styles = StyleSheet.create({
     maxWidth: '60%',
     textAlign: 'right',
   },
-  labelRow: {
+  invoiceButton: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#475569',
-  },
-  lockedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  lockedBadgeText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  amountInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 58,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  amountInputRowDisabled: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
-  },
-  currencySymbol: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginRight: 8,
-  },
-  currencySymbolDisabled: {
-    color: '#64748B',
-  },
-  amountInput: {
-    flex: 1,
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#0F172A',
-    padding: 0,
-  },
-  amountInputDisabled: {
-    color: '#475569',
-  },
-  descriptionInput: {
-    height: 48,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    fontSize: 14,
-    color: '#0F172A',
-    backgroundColor: '#FFFFFF',
-  },
-  descriptionInputDisabled: {
-    backgroundColor: '#F8FAFC',
-    borderColor: '#E2E8F0',
-    color: '#475569',
-  },
-  quickMessagesContainer: {
-    marginTop: 10,
-  },
-  quickMessagesScroll: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  quickMessagePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
-  },
-  quickMessageText: {
-    fontSize: 13,
-    color: '#334155',
-    fontWeight: '500',
-  },
-  addQuickMessagePill: {
-    paddingHorizontal: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#E6F4F0',
+    borderWidth: 1,
+    borderColor: '#A8D5C5',
+    marginBottom: 16,
+  },
+  invoiceButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0D6B50',
   },
   payButton: {
-    height: 50,
-    backgroundColor: '#2563EB',
+    height: 52,
+    backgroundColor: '#0D6B50',
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 8,
-    shadowColor: '#2563EB',
+    shadowColor: '#0D6B50',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
-    shadowRadius: 10,
+    shadowRadius: 8,
     elevation: 3,
   },
   payButtonDisabled: {
@@ -663,5 +736,11 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+  },
+  bottomHelperText: {
+    textAlign: 'center',
+    color: '#64748B',
+    fontSize: 12,
+    marginTop: 10,
   },
 });

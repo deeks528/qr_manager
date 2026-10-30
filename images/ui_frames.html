@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    .phone-frame {
+      width: 320px;
+      border-radius: 36px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.18), 0 0 0 8px #1e293b, 0 0 0 10px #334155;
+      overflow: hidden;
+      position: relative;
+      background: #F8FAFC;
+    }
+    .screen { display: none; }
+    .screen.active { display: block; }
+    .avatar { width: 42px; height: 42px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; color: white; cursor: pointer; flex-shrink: 0; transition: box-shadow 0.15s; }
+    .avatar.selected { box-shadow: 0 0 0 2.5px #0F172A; }
+    .chip { padding: 6px 10px; border-radius: 8px; border: 1px solid #CBD5E1; font-size: 12px; cursor: pointer; background: white; color: #475569; transition: all 0.15s; }
+    .chip.active { border-color: #2563EB; background: #EFF6FF; color: #2563EB; font-weight: 600; }
+    .slot-btn { width: 38px; height: 38px; border-radius: 8px; border: 1px solid #CBD5E1; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 14px; background: white; color: #475569; transition: all 0.15s; }
+    .slot-btn.active { border-color: #2563EB; background: #EFF6FF; color: #2563EB; font-weight: 700; }
+    .tab-btn { padding: 6px 16px; border-radius: 999px; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; color: #64748B; }
+    .tab-btn.active { background: #0F172A; color: white; }
+    .import-overlay { display: none; position: absolute; inset: 0; background: rgba(15,23,42,0.55); z-index: 20; align-items: center; justify-content: center; padding: 20px; }
+    .import-overlay.open { display: flex; }
+  </style>
+</head>
+<body class="bg-transparent antialiased">
+<div style="display:flex;flex-direction:column;align-items:center;gap:14px;padding:16px 0 24px;">
+
+  <!-- Screen tabs -->
+  <div style="display:flex;gap:4px;background:#F1F5F9;padding:4px;border-radius:999px;">
+    <button class="tab-btn active" onclick="switchScreen('home',this)">🏠 Home</button>
+    <button class="tab-btn" onclick="switchScreen('settings',this)">⚙️ Settings</button>
+  </div>
+
+  <!-- Phone -->
+  <div class="phone-frame">
+
+    <!-- Notch bar -->
+    <div style="background:#1e293b;height:26px;display:flex;align-items:center;justify-content:center;">
+      <div style="width:68px;height:14px;background:#0f172a;border-radius:0 0 10px 10px;"></div>
+    </div>
+
+    <!-- ══ HOME ══ -->
+    <div id="screen-home" class="screen active" style="background:#F8FAFC;">
+
+      <!-- Header -->
+      <div style="background:white;border-bottom:1px solid #E2E8F0;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
+        <div id="avatar-row" style="display:flex;gap:7px;align-items:center;">
+          <div class="avatar selected" style="background:#2563EB;" onclick="selectProfile(0,this)">MU</div>
+          <div class="avatar" style="background:#059669;" onclick="selectProfile(1,this)">WA</div>
+          <div class="avatar" style="background:#7C3AED;" onclick="selectProfile(2,this)">BS</div>
+          <div style="width:36px;height:36px;border-radius:999px;border:1px solid #CBD5E1;background:white;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:20px;color:#64748B;">+</div>
+        </div>
+        <div onclick="switchScreen('settings',document.querySelectorAll('.tab-btn')[1])" style="width:34px;height:34px;border-radius:999px;border:1px solid #E2E8F0;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:17px;">⚙️</div>
+      </div>
+
+      <!-- QR Preview Card -->
+      <div style="padding:12px 14px 8px;">
+        <div style="background:white;border-radius:16px;border:1px solid #E2E8F0;padding:16px;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+          <canvas id="qr-canvas" width="136" height="136" style="display:block;margin:0 auto;border-radius:4px;"></canvas>
+          <div id="profile-name" style="margin-top:10px;font-size:15px;font-weight:700;color:#0F172A;">My UPI Account</div>
+          <div id="profile-meta" style="font-size:12px;color:#64748B;margin-top:2px;">myname@upi</div>
+          <div id="amount-row" style="display:flex;align-items:center;gap:8px;margin-top:10px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:6px 10px;">
+            <span style="font-size:12px;color:#64748B;font-weight:500;">Amount ₹</span>
+            <input type="number" placeholder="0" style="border:none;background:transparent;font-size:13px;color:#0F172A;outline:none;width:60px;">
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button style="flex:1;padding:8px;border:1px solid #CBD5E1;border-radius:8px;background:white;font-size:12px;font-weight:600;color:#0F172A;cursor:pointer;">Edit</button>
+            <button id="default-btn" onclick="setDefault()" style="flex:1;padding:8px;border:1px solid #CBD5E1;border-radius:8px;background:white;font-size:12px;font-weight:600;color:#0F172A;cursor:pointer;">Set as Default</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Profile List -->
+      <div style="padding:4px 14px 16px;">
+        <div style="font-size:11px;font-weight:600;color:#94A3B8;letter-spacing:0.06em;text-transform:uppercase;margin-bottom:8px;">Profiles</div>
+        <div style="background:white;border-radius:12px;border:1px solid #E2E8F0;overflow:hidden;">
+          <div onclick="selectProfile(0)" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;">
+            <div style="width:32px;height:32px;border-radius:999px;background:#2563EB;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;flex-shrink:0;">MU</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:600;color:#0F172A;">My UPI Account</div>
+              <div style="font-size:11px;color:#94A3B8;">UPI · myname@upi</div>
+            </div>
+            <div style="color:#CBD5E1;">›</div>
+          </div>
+          <div onclick="selectProfile(1)" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #F1F5F9;cursor:pointer;">
+            <div style="width:32px;height:32px;border-radius:999px;background:#059669;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;flex-shrink:0;">WA</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:600;color:#0F172A;">WhatsApp</div>
+              <div style="font-size:11px;color:#94A3B8;">WhatsApp · +91 98765 43210</div>
+            </div>
+            <div style="color:#CBD5E1;">›</div>
+          </div>
+          <div onclick="selectProfile(2)" style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer;">
+            <div style="width:32px;height:32px;border-radius:999px;background:#7C3AED;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:white;flex-shrink:0;">BS</div>
+            <div style="flex:1;min-width:0;">
+              <div style="font-size:13px;font-weight:600;color:#0F172A;">Business UPI</div>
+              <div style="font-size:11px;color:#94A3B8;">UPI · business@upi</div>
+            </div>
+            <div style="color:#CBD5E1;">›</div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /home -->
+
+    <!-- ══ SETTINGS ══ -->
+    <div id="screen-settings" class="screen" style="background:#F8FAFC;position:relative;">
+
+      <!-- Import overlay -->
+      <div class="import-overlay" id="import-modal">
+        <div style="background:white;border-radius:16px;padding:18px;width:100%;box-shadow:0 10px 40px rgba(0,0,0,0.2);">
+          <div style="font-size:14px;font-weight:700;color:#0F172A;margin-bottom:4px;">Import Backup</div>
+          <div style="font-size:12px;color:#64748B;margin-bottom:10px;">Paste your exported JSON backup:</div>
+          <textarea rows="4" placeholder='{"version":1,...}' style="width:100%;border:1px solid #CBD5E1;border-radius:8px;padding:8px;font-size:12px;color:#0F172A;background:#F8FAFC;resize:none;box-sizing:border-box;outline:none;"></textarea>
+          <div id="verify-result" style="display:none;margin-top:8px;padding:8px;border-radius:6px;font-size:11px;font-weight:500;background:#F0FDF4;color:#15803D;border:1px solid #BBF7D0;">✓ Valid backup found — 3 profiles, 1 setting</div>
+          <div style="display:flex;gap:8px;margin-top:10px;">
+            <button onclick="verifyBackup()" style="flex:1;padding:8px;background:#2563EB;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">Verify</button>
+            <button onclick="closeImport()" style="flex:1;padding:8px;background:white;border:1px solid #CBD5E1;border-radius:8px;font-size:12px;font-weight:600;color:#475569;cursor:pointer;">Cancel</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Settings header -->
+      <div style="background:white;border-bottom:1px solid #E2E8F0;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;">
+        <div onclick="switchScreen('home',document.querySelectorAll('.tab-btn')[0])" style="width:34px;height:34px;border-radius:999px;background:#F1F5F9;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;font-weight:700;color:#0F172A;">←</div>
+        <div style="font-size:15px;font-weight:700;color:#0F172A;">Settings</div>
+        <div style="width:34px;"></div>
+      </div>
+
+      <div style="padding:12px;overflow-y:auto;max-height:530px;">
+
+        <!-- Card: Profile Preferences -->
+        <div style="background:white;border-radius:12px;border:1px solid #E2E8F0;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+          <div style="font-size:13px;font-weight:700;color:#0F172A;margin-bottom:12px;">Profile Preferences</div>
+          <div style="font-size:12px;font-weight:600;color:#334155;">Default Startup Profile</div>
+          <div style="font-size:11px;color:#64748B;margin:2px 0 10px;">The profile that opens automatically on launch</div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px;">
+            <div class="chip" onclick="selectChip(this)">None (Off)</div>
+            <div class="chip active" onclick="selectChip(this)">My UPI</div>
+            <div class="chip" onclick="selectChip(this)">WhatsApp</div>
+            <div class="chip" onclick="selectChip(this)">Business</div>
+          </div>
+          <div style="font-size:12px;font-weight:600;color:#334155;">Max Header Slots</div>
+          <div style="font-size:11px;color:#64748B;margin:2px 0 10px;">Quick access profiles in header (1–4)</div>
+          <div style="display:flex;gap:8px;">
+            <div class="slot-btn" onclick="selectSlot(this)">1</div>
+            <div class="slot-btn active" onclick="selectSlot(this)">2</div>
+            <div class="slot-btn" onclick="selectSlot(this)">3</div>
+            <div class="slot-btn" onclick="selectSlot(this)">4</div>
+          </div>
+        </div>
+
+        <!-- Card: Backup -->
+        <div style="background:white;border-radius:12px;border:1px solid #E2E8F0;padding:14px;margin-bottom:10px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+          <div style="font-size:13px;font-weight:700;color:#0F172A;margin-bottom:6px;">Backup & Recovery</div>
+          <div style="font-size:11px;color:#64748B;margin-bottom:12px;">Export your profiles to a JSON file, or restore from one.</div>
+          <div style="display:flex;gap:8px;">
+            <button onclick="showExportToast()" style="flex:1;padding:9px;background:#0F172A;color:white;border:none;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;">Export Backup</button>
+            <button onclick="openImport()" style="flex:1;padding:9px;background:white;border:1px solid #CBD5E1;border-radius:8px;font-size:12px;font-weight:600;color:#0F172A;cursor:pointer;">Import Backup</button>
+          </div>
+          <div id="export-toast" style="display:none;margin-top:10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:6px;padding:8px 10px;font-size:11px;color:#15803D;font-weight:500;">✓ Backup exported & shared!</div>
+        </div>
+
+        <!-- Card: About -->
+        <div style="background:white;border-radius:12px;border:1px solid #E2E8F0;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,0.04);">
+          <div style="font-size:13px;font-weight:700;color:#0F172A;margin-bottom:10px;">About</div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9;">
+            <span style="font-size:12px;color:#64748B;">Version</span>
+            <span style="font-size:12px;font-weight:600;color:#0F172A;">1.0.0 (MVP)</span>
+          </div>
+          <div style="display:flex;justify-content:space-between;padding:8px 0;">
+            <span style="font-size:12px;color:#64748B;">Storage Mode</span>
+            <span style="font-size:12px;font-weight:600;color:#0F172A;">Offline-Only (SQLite)</span>
+          </div>
+        </div>
+
+      </div>
+    </div><!-- /settings -->
+
+  </div><!-- /phone-frame -->
+</div>
+
+<script>
+  // ── Draw QR ──────────────────────────────────────────────────────
+  function drawQR(canvas) {
+    const ctx = canvas.getContext('2d');
+    const s = canvas.width, c = s / 21;
+    ctx.fillStyle = 'white'; ctx.fillRect(0, 0, s, s);
+    const P = [
+      [1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1],
+      [1,0,0,0,0,0,1,0,0,1,0,1,0,0,1,0,0,0,0,0,1],
+      [1,0,1,1,1,0,1,0,1,0,1,0,1,0,1,0,1,1,1,0,1],
+      [1,0,1,1,1,0,1,0,0,1,0,0,0,0,1,0,1,1,1,0,1],
+      [1,0,1,1,1,0,1,0,1,0,0,1,1,0,1,0,1,1,1,0,1],
+      [1,0,0,0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,0,0,1],
+      [1,1,1,1,1,1,1,0,1,0,1,0,1,0,1,1,1,1,1,1,1],
+      [0,0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,0,0,0,0],
+      [1,0,1,1,0,0,1,1,1,0,0,0,1,1,1,0,1,0,1,1,0],
+      [0,1,0,0,1,0,0,0,1,0,1,0,0,1,0,1,0,0,1,0,1],
+      [1,0,1,0,0,1,1,1,0,0,0,1,1,0,0,0,1,1,0,0,1],
+      [0,1,0,1,0,0,0,0,0,1,1,0,0,0,1,0,0,1,0,1,0],
+      [1,0,0,0,1,0,1,0,1,0,0,1,0,1,1,1,1,0,0,0,1],
+      [0,0,0,0,0,0,0,0,1,0,1,0,0,0,0,0,1,0,0,1,0],
+      [1,1,1,1,1,1,1,0,0,1,0,0,1,0,1,0,1,1,0,0,1],
+      [1,0,0,0,0,0,1,0,1,0,0,1,0,1,0,1,0,0,1,0,1],
+      [1,0,1,1,1,0,1,0,0,0,1,0,1,0,1,0,1,0,0,1,0],
+      [1,0,1,1,1,0,1,0,1,1,0,0,0,1,0,0,0,1,0,0,1],
+      [1,0,1,1,1,0,1,0,0,0,1,1,1,0,1,1,1,0,1,0,0],
+      [1,0,0,0,0,0,1,0,1,0,0,1,0,0,0,1,0,0,0,1,0],
+      [1,1,1,1,1,1,1,0,0,1,1,0,1,0,1,0,1,0,1,0,1],
+    ];
+    ctx.fillStyle = '#0F172A';
+    P.forEach((row, r) => row.forEach((b, col) => { if (b) ctx.fillRect(col*c, r*c, c-0.5, c-0.5); }));
+  }
+  drawQR(document.getElementById('qr-canvas'));
+
+  // ── Profile data ─────────────────────────────────────────────────
+  const profiles = [
+    { name: 'My UPI Account', meta: 'myname@upi', isUpi: true },
+    { name: 'WhatsApp', meta: '+91 98765 43210', isUpi: false },
+    { name: 'Business UPI', meta: 'business@upi', isUpi: true },
+  ];
+  let sel = 0, def = 0;
+
+  function selectProfile(idx) {
+    sel = idx;
+    document.querySelectorAll('#avatar-row .avatar').forEach((a,i) => a.classList.toggle('selected', i===idx));
+    const p = profiles[idx];
+    document.getElementById('profile-name').textContent = p.name;
+    document.getElementById('profile-meta').textContent = p.meta;
+    document.getElementById('amount-row').style.display = p.isUpi ? 'flex' : 'none';
+    updateDefaultBtn();
+  }
+
+  function setDefault() { def = sel; updateDefaultBtn(); }
+
+  function updateDefaultBtn() {
+    const btn = document.getElementById('default-btn');
+    const isDefault = sel === def;
+    btn.textContent = isDefault ? '✓ Default' : 'Set as Default';
+    Object.assign(btn.style, isDefault
+      ? { borderColor:'#2563EB', color:'#2563EB', background:'#EFF6FF' }
+      : { borderColor:'#CBD5E1', color:'#0F172A', background:'white' });
+  }
+
+  // ── Screen switching ─────────────────────────────────────────────
+  function switchScreen(name, btn) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById('screen-' + name).classList.add('active');
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+  }
+
+  // ── Chips & slots ────────────────────────────────────────────────
+  function selectChip(el) {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+  }
+  function selectSlot(el) {
+    document.querySelectorAll('.slot-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+  }
+
+  // ── Backup actions ────────────────────────────────────────────────
+  function showExportToast() {
+    const t = document.getElementById('export-toast');
+    t.style.display = 'block';
+    setTimeout(() => t.style.display = 'none', 2500);
+  }
+  function openImport() { document.getElementById('import-modal').classList.add('open'); }
+  function closeImport() {
+    document.getElementById('import-modal').classList.remove('open');
+    document.getElementById('verify-result').style.display = 'none';
+  }
+  function verifyBackup() { document.getElementById('verify-result').style.display = 'block'; }
+</script>
+</body>
+</html>

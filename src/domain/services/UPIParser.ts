@@ -52,9 +52,14 @@ export class UPIParser {
         try {
           const decodedKey = decodeURIComponent(key.replace(/\+/g, ' '));
           const decodedValue = decodeURIComponent(value.replace(/\+/g, ' '));
-          parameters[decodedKey] = decodedValue;
+          // Sanitize literal 'null' strings per NPCI Note 3
+          if (decodedValue.trim().toLowerCase() !== 'null') {
+            parameters[decodedKey] = decodedValue;
+          }
         } catch {
-          parameters[key] = value;
+          if (value.trim().toLowerCase() !== 'null') {
+            parameters[key] = value;
+          }
         }
       }
     }
@@ -64,17 +69,37 @@ export class UPIParser {
       throw new Error('Missing UPI ID in QR code');
     }
 
+    const getParam = (key: string): string | undefined => {
+      const val = parameters[key]?.trim();
+      if (!val || val.toLowerCase() === 'null') return undefined;
+      return val;
+    };
+
     return {
       upiId,
-      payeeName: parameters['pn']?.trim(),
-      amount: parameters['am']?.trim(),
-      transactionNote: parameters['tn']?.trim(),
-      currency: parameters['cu']?.trim(),
-      merchantCategory: parameters['mc']?.trim(),
-      transactionReference: parameters['tr']?.trim(),
-      transactionId: parameters['tid']?.trim(),
-      url: parameters['url']?.trim(),
-      applicationId: parameters['aid']?.trim(),
+      payeeName: getParam('pn'),
+      amount: getParam('am'),
+      minimumAmount: getParam('mam'),
+      transactionNote: getParam('tn'),
+      currency: getParam('cu'),
+      merchantCategory: getParam('mc'),
+      transactionReference: getParam('tr'),
+      transactionId: getParam('tid'),
+      url: getParam('url'),
+      applicationId: getParam('aid'),
+      version: getParam('ver'),
+      mode: getParam('mode'),
+      orgId: getParam('orgid'),
+      signature: getParam('sign'),
+      merchantId: getParam('mid'),
+      storeId: getParam('msid'),
+      terminalId: getParam('mtid'),
+      qrMedium: getParam('qrMedium'),
+      invoiceNo: getParam('invoiceNo'),
+      invoiceDate: getParam('invoiceDate'),
+      invoiceName: getParam('invoiceName'),
+      gstIn: getParam('gstIn'),
+      gstBreakup: getParam('gstBrkUp'),
       rawPayload: trimmed,
       parameters,
     };

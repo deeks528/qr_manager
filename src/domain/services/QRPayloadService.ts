@@ -3,20 +3,33 @@ import { ValidationService } from '@domain/services/ValidationService';
 
 export class QRPayloadService {
   static createUPIPayload(profile: UPIProfile, runtimeAmount?: number | null): string {
-    const params = new URLSearchParams();
-    params.set('pa', ValidationService.validateUPIId(profile.upiId));
-    params.set('pn', profile.nickname);
+    const pairs: [string, string][] = [
+      ['pa', ValidationService.validateUPIId(profile.upiId)],
+      ['pn', profile.nickname],
+      ['cu', 'INR'],
+    ];
 
     const amount = ValidationService.validateAmount(runtimeAmount ?? profile.minimumAmount);
     if (amount !== null && amount > 0) {
-      params.set('am', amount.toFixed(2));
+      pairs.push(['am', amount.toFixed(2)]);
     }
 
     if (profile.defaultDescription) {
-      params.set('tn', profile.defaultDescription);
+      pairs.push(['tn', profile.defaultDescription]);
     }
 
-    return `upi://pay?${params.toString()}`;
+    // RFC 3986 percent-encoding ensures spaces are %20 rather than '+'.
+    // Preserves literal '@' in 'pa' for compatibility with UPI application VPA regexes.
+    const queryString = pairs
+      .map(([k, v]) => {
+        if (k === 'pa') {
+          return `${encodeURIComponent(k)}=${encodeURIComponent(v).replace(/%40/g, '@')}`;
+        }
+        return `${encodeURIComponent(k)}=${encodeURIComponent(v)}`;
+      })
+      .join('&');
+
+    return `upi://pay?${queryString}`;
   }
 
   static createWhatsAppPayload(profile: WhatsAppProfile): string {

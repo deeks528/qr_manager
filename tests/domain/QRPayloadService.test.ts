@@ -67,3 +67,31 @@ test('UPI payload falls back to stored minimum amount when runtime amount is bla
 
   assert.equal(payload.includes('am=10.00'), true);
 });
+
+test('UPI payload uses compact format and RFC 3986 percent encoding for spaces', () => {
+  const profile: UPIProfile = {
+    ...baseProfile,
+    nickname: 'John Doe Enterprise',
+    type: ProfileType.UPI,
+    upiId: 'johndoe@bank',
+    minimumAmount: null,
+    defaultDescription: 'Monthly Grocery Bill',
+  };
+
+  const payload = QRPayloadService.createUPIPayload(profile);
+
+  // Verifies RFC 3986 space encoding (%20, not +)
+  assert.equal(payload.includes('pn=John%20Doe%20Enterprise'), true);
+  assert.equal(payload.includes('tn=Monthly%20Grocery%20Bill'), true);
+  assert.equal(payload.includes('+'), false);
+
+  // Verifies core compact parameters for instant camera scanning and literal '@' preservation
+  assert.equal(payload.includes('pa=johndoe@bank'), true);
+  assert.equal(payload.includes('cu=INR'), true);
+
+  // Verifies heavy metadata tags are omitted to maintain low QR density
+  assert.equal(payload.includes('orgid='), false);
+  assert.equal(payload.includes('mode='), false);
+  assert.equal(payload.includes('ver='), false);
+});
+

@@ -55,7 +55,7 @@ export function QRPreview({ profile, runtimeAmount, initialPayload, size = 204 }
 
   return (
     <View accessibilityLabel={`${profile.nickname} QR code`} style={[styles.qrContainer, { width: size, height: size }]}>
-      <QRCode backgroundColor="#FFFFFF" color="#0F172A" size={size} value={payload} />
+      <QRCode backgroundColor="#FFFFFF" color="#0F172A" quietZone={6} size={size} value={payload} />
     </View>
   );
 }
